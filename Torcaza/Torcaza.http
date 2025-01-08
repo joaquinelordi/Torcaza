@@ -1,0 +1,6 @@
+@Torcaza_HostAddress = http://localhost:5133
+
+GET {{Torcaza_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
