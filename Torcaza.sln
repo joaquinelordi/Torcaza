@@ -5,6 +5,10 @@ VisualStudioVersion = 17.10.35027.167
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Torcaza", "Torcaza\Torcaza.csproj", "{276155C5-F672-41A2-B214-758CAEA38C02}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServidorTCP", "ServidorTCP\ServidorTCP.csproj", "{5398D09B-341E-4F40-A121-1C26F720760F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Entidades", "Entidades\Entidades.csproj", "{710C6974-7D66-4BFE-A8EA-4574C6FE94FB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{276155C5-F672-41A2-B214-758CAEA38C02}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{276155C5-F672-41A2-B214-758CAEA38C02}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{276155C5-F672-41A2-B214-758CAEA38C02}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5398D09B-341E-4F40-A121-1C26F720760F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5398D09B-341E-4F40-A121-1C26F720760F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5398D09B-341E-4F40-A121-1C26F720760F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5398D09B-341E-4F40-A121-1C26F720760F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{710C6974-7D66-4BFE-A8EA-4574C6FE94FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{710C6974-7D66-4BFE-A8EA-4574C6FE94FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{710C6974-7D66-4BFE-A8EA-4574C6FE94FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{710C6974-7D66-4BFE-A8EA-4574C6FE94FB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

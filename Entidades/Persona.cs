@@ -1,4 +1,4 @@
-﻿namespace Torcaza.Entidades
+﻿namespace Entidades
 {
     public class Persona
     {
