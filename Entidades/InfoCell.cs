@@ -10,8 +10,8 @@ namespace Entidades
 {
     public class InfoCell
     {
-        public BigInteger Mcc { get; set; }
-        public BigInteger Mnc { get; set; }
+        public long Mcc { get; set; }
+        public long Mnc { get; set; }
         public string Lac { get; set; }
         public string Cellid { get; set; }
         public double? Lat { get; set; }
@@ -21,7 +21,7 @@ namespace Entidades
         public int Canal { get; set; }
         public string Banda { get; set; }
         public DateTime FechaHora { get; set; }
-        public BigInteger NumeroRegistro { get; set; }
+        public string NumeroRegistro { get; set; }
         public int AverageSignalStrength { get; set; }
         public int Range { get; set; }
         public int Samples { get; set; }
@@ -48,7 +48,7 @@ namespace Entidades
             Canal = 0;
             Banda = string.Empty;
             FechaHora = DateTime.Now;
-            NumeroRegistro = 0;
+            NumeroRegistro = string.Empty;
             IsInDatabase = false;
         }
 
@@ -64,8 +64,9 @@ namespace Entidades
             Canal = cellInfo.Channel;
             Banda = cellInfo.Band ?? string.Empty; 
             FechaHora = DateTime.Now;
-            NumeroRegistro = 0;
+            NumeroRegistro = string.Empty;
             IsInDatabase = false;
+            Radio = string.Empty;
         }
     }
 }

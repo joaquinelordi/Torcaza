@@ -166,41 +166,15 @@ namespace ServidorTCP
 
                     CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
                     BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
-                    foreach (var infoCell in infoTorreCelulares)
-                    {
-                        CargarRegistroTorreCelular(infoCell);
-                    }
+                    CargarListaRegistroTorreCelular(ref infoTorreCelulares);
+ 
                     break;
 
-                case eTipoMensaje.TraduciSoyDeBoke:
-                    Console.WriteLine($"ProcesarMensaje -> Traduci ameo, soy de Boca: {mensaje}");
+                case eTipoMensaje.TipoDesconocido:
+                    Console.WriteLine($"ProcesarMensaje -> Tipo de mensaje desconocido: {mensaje}");
                     break;
             }
 
-        }
-
-        //No se usa mas, pasamos a formato JSON
-        private eTipoMensaje IdentificarTipoMensaje(string mensaje)
-        {
-            eTipoMensaje tipoMensaje;
-            var campos = mensaje.Split(',');
-
-            // si cumple esto recibi un mensaje con coordenadas
-            if (campos.Length > 0 && campos[1] == "GNSS")
-            {
-                tipoMensaje = eTipoMensaje.GNSS;
-            }
-            else if (campos.Length > 0 && campos[1] == "MN")
-            {
-                tipoMensaje = eTipoMensaje.InfoCell;
-            }
-            else
-            {
-                tipoMensaje = eTipoMensaje.TraduciSoyDeBoke;
-            }
-
-            Console.WriteLine($"IdentificatTipoMensaje -> Tipo de mensaje: {tipoMensaje}");
-            return tipoMensaje;
         }
 
         #region Torres Celulares
@@ -220,24 +194,6 @@ namespace ServidorTCP
                 InfoCell infoCellVecina = new InfoCell(cellInfo);
                 infoTorreCelulares.Add(infoCellVecina);
             }
-
-
-            /*
-            List<string> registros = parsearRegistros(str);
-            foreach (string registro in registros)
-            {
-                var campos = registro.Split(',');
-
-                // Aca parseo los datos de las torres celulares  
-                InfoCell infoCell = new InfoCell();
-                infoCell.Mcc = BigInteger.Parse(campos[2]); // Conversión explícita de string a BigInteger  
-                infoCell.Mnc = BigInteger.Parse(campos[3]); // Conversión explícita de string a BigInteger  
-                infoCell.Lac = campos[4];
-                infoCell.Cellid = campos[5];
-                infoTorreCelulares.Add(infoCell);
-                Console.WriteLine($" [{infoCell.Mcc};{infoCell.Mnc};{infoCell.Lac};{infoCell.Cellid}]");                   
-            }
-            */
         }
 
         List<string> parsearRegistros(string str)
@@ -298,24 +254,45 @@ namespace ServidorTCP
                 }
             }
         }
-
-
-
         /// <summary>
-        /// Metodo encargado de cargar el registro de la torre celular en la base de datos
+        /// obtiene un numero de registro y carga los infocell
         /// </summary>
-        /// <param name="infoCell"></param>
-        private void CargarRegistroTorreCelular(InfoCell infoCell)
+        /// <param name="listaInfoCell"></param>
+        private void CargarListaRegistroTorreCelular(ref List<InfoCell> listaInfoCell)
         {
+            Guid numeroReporte = Guid.Empty;
+
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
             var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440002");
 
-            // Este campo hay que definir a partir de que se crea, es el que controla que datos de torre celulares
-            // fueron enviados desde el mismo punto
-            // y en el mismo momento, para no cargar datos repetidos
-            var numeroReporte = Guid.Parse("550e8400-e29b-41d4-a716-446655440006");
+            numeroReporte = ObtenerNumeroReporte(idRegistro, idDispositivo, agenteID);
+
+            if (numeroReporte != Guid.Empty)
+            {
+                foreach (InfoCell infoCell in listaInfoCell)
+                {
+                    CargarRegistroTorreCelular(infoCell, numeroReporte);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"CargarListaRegistroTorreCelular -> No se pudo obtener un numero de reporte, " +
+                    $"por lo tanto no se carga la lista de InfoCell");
+            }
+        }
+
+        /// <summary>
+        /// Metodo encargado de cargar el registro de la torre celular en la base de datos
+        /// </summary>
+        /// <param name="infoCell"></param>
+        private void CargarRegistroTorreCelular(InfoCell infoCell, Guid numeroReporte)
+        {
+            // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440002");
 
             // Convertimos la fecha y hora al formato UTC
             DateTime cellTimestamp = infoCell.FechaHora.ToUniversalTime();
@@ -329,7 +306,6 @@ namespace ServidorTCP
                 using var command = new NpgsqlCommand("CALL cargar_ReporteCeldaCelular(@cell_id, @cell_mcc, @cell_mnc, @cell_lac, @cell_tecnologia, @cell_band, @cell_chanel, @cell_nivelsenial, @cell_timestamp, @numeroreporte, @cell_longitud, @cell_latitud, @id_registro, @id_dispositivo, @id_agente)", connection);
 
                 // Agrego los parametros
-                // Agregar parámetros con los tipos correctos
                 command.Parameters.AddWithValue("cell_id", Convert.ToInt64(infoCell.Cellid, 16)); //string de un hexadecimal
                 command.Parameters.AddWithValue("cell_mcc", (long)infoCell.Mcc);
                 command.Parameters.AddWithValue("cell_mnc", (long)infoCell.Mnc);
@@ -341,26 +317,27 @@ namespace ServidorTCP
                 command.Parameters.AddWithValue("cell_timestamp", cellTimestamp);
                 command.Parameters.AddWithValue("numeroreporte", numeroReporte);
 
-
                 command.Parameters.AddWithValue("cell_longitud", infoCell.Lon.HasValue ? infoCell.Lon.Value : DBNull.Value);
                 command.Parameters.AddWithValue("cell_latitud", infoCell.Lat.HasValue ? infoCell.Lat.Value : DBNull.Value);
 
-                command.Parameters.AddWithValue("id_registro", idRegistro); // Respetar mayúsculas y minúsculas
-                command.Parameters.AddWithValue("id_dispositivo", idDispositivo); // Respetar mayúsculas y minúsculas
-                command.Parameters.AddWithValue("id_agente", agenteID); // Respetar mayúsculas y minúsculas
+                command.Parameters.AddWithValue("id_registro", idRegistro);
+                command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
+                command.Parameters.AddWithValue("id_agente", agenteID);
 
 
                 // Debug
+                /*
                 var queryDebug = new StringBuilder(command.CommandText);
                 foreach (NpgsqlParameter param in command.Parameters)
                 {
                     queryDebug.AppendLine()
                               .Append($"-- {param.ParameterName} = {param.Value}");
                 }
-
                 string consultaCompleta = queryDebug.ToString();
                 Console.WriteLine("Consulta SQL generada:");
                 Console.WriteLine(consultaCompleta);
+                */
+
 
                 // Ejecutar el comando
                 command.ExecuteNonQuery();
@@ -382,6 +359,59 @@ namespace ServidorTCP
                 Console.WriteLine($"Detalles: {ex.InnerException?.Message}");
                 Console.WriteLine($"Stack Trace: {ex.StackTrace}");
             }
+        }
+
+        /// <summary>
+        /// este metodo deberia consultar la base de datos y devolver un numero de reporte unico
+        /// </summary>
+        /// <param name="idRegistro"></param>
+        /// <param name="idDispositivo"></param>
+        /// <param name="agenteID"></param>
+        /// <returns></returns>
+        private Guid ObtenerNumeroReporte(Guid idRegistro, Guid idDispositivo, Guid agenteID)
+        {
+            Guid numeroReporte = Guid.Empty; // Generar un nuevo GUID como ejemplo
+
+            try
+            {
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+
+                using var command = new NpgsqlCommand("SELECT numero_reporte FROM obtener_numero_registro_torres_celulares(@id_registro, @id_dispositivo, @id_agente)", connection);
+
+                command.Parameters.AddWithValue("id_registro", idRegistro);
+                command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
+                command.Parameters.AddWithValue("id_agente", agenteID);
+
+                
+                using var reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    // Asumimos que el resultado es un GUID
+                    numeroReporte = reader.GetGuid(0);
+                }
+                else
+                {
+                    // Si no hay resultado, lo dejo vacio
+                    numeroReporte = Guid.Empty;
+                }
+
+                Console.WriteLine($"CargarRegistroTorreCelular -> Carga exitosa");
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Error de PostgreSQL: {ex.Message}");
+                Console.WriteLine($"Detalles: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            }
+
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al conectar a la base de datos: {ex.Message}");
+                Console.WriteLine($"Detalles: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            }
+            return numeroReporte;
         }
 
         #endregion
@@ -454,14 +484,4 @@ namespace ServidorTCP
             _listener.Stop();
         }
     }
-
-    //No se usa mas, usamos el de TrackerPayloadBase
-    /*
-    enum eTipoMensaje
-    {
-        GNSS = 0,
-        InfoCell,
-        TraduciSoyDeBoke
-    }
-    */
 }

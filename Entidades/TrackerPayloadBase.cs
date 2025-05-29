@@ -54,6 +54,8 @@ namespace Entidades
         [JsonProperty("REGS")]
         public int Regs { get; set; }
 
+
+
     }
 
     public class CellNeighborsInfoPayload : TrackerPayloadBase
@@ -177,6 +179,6 @@ namespace Entidades
         [EnumMember(Value = "MNGNSS")]
         GNSS,
 
-        TraduciSoyDeBoke
+        TipoDesconocido = 99
     }
 }
