@@ -13,6 +13,7 @@ using System.Diagnostics;
 using Entidades;
 using System.Numerics;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping;
+using System;
 
 namespace ServidorTCP
 {
@@ -143,38 +144,103 @@ namespace ServidorTCP
                 mensaje = buffer;
                 Console.WriteLine($"ProcesarMensaje -> recibi un JSON, no un JWT: {mensaje}");
             }
-
             TrackerPayloadBase payloadBase = JsonDeserializer.DeserializeJson(mensaje);
             eTipoMensaje accion = payloadBase.GetTipoMensaje();
-            List<InfoCell> infoTorreCelulares = new List<InfoCell>();
+
             //Aca la idea es usar un enum con los tipos de acciones disponibles, enviado en el objeto del mensaje 
-            switch (accion)
+            long numeroEvento = CargarEvento(payloadBase);    
+        }
+
+        long CargarEvento(TrackerPayloadBase payloadBase)
+        {
+            List<InfoCell> infoTorreCelulares = new List<InfoCell>();
+            // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            // Aca deberia cargar el evento en la base de datos y devolver el numero de evento
+            long numeroEvento;
+            DateTime fechaMensaje = payloadBase.DateTime.ToUniversalTime();
+            eTipoMensaje tipoMensaje = payloadBase.GetTipoMensaje();
+            string JsonEstadoBateria = "JSON de estado bateria";
+            string JsonUbicacion = "JSON de GPS";
+            string JsonInfoCell = "JSON InfoCell";
+            string JsonGiroscopio = "JSON Giroscopio";
+
+            try 
             {
-                case eTipoMensaje.GNSS:
-                    //Hago la traduccion de datos crudos del rastreado y los cargo en la base
-                    Ubicacion ubicacion = new Ubicacion();
-                    infoTorreCelulares.Add(new InfoCell(payloadBase.CellInfo));
-                    BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
-                    //TODO: refactorizar
-                    CargarDatosRastreador(ref ubicacion, mensaje);
-                    CargarRegistroTorreCelular(infoTorreCelulares[0]);
-                    CargarUbicacion(ubicacion);
-                    break;
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
 
-                case eTipoMensaje.InfoCell:
-                    //
+                // Comando del SP
+                using var command = new NpgsqlCommand("SELECT id_evento FROM grabar_evento(@id_registro, @id_dispositivo, @tipo_mensaje, @estado_bateria, @gpsInfo, @gsmInfo, @fecha_mensaje, @giroscopioInfo)", connection);
 
-                    CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
-                    BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
-                    CargarListaRegistroTorreCelular(ref infoTorreCelulares);
- 
-                    break;
+                command.Parameters.AddWithValue("id_registro", idRegistro);
+                command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
+                command.Parameters.AddWithValue("estado_bateria", JsonEstadoBateria);
+                command.Parameters.AddWithValue("gpsInfo", JsonUbicacion);
+                command.Parameters.AddWithValue("gsmInfo", JsonInfoCell);
+                command.Parameters.AddWithValue("fecha_mensaje", fechaMensaje);
+                command.Parameters.AddWithValue("giroscopioInfo", JsonGiroscopio);
 
-                case eTipoMensaje.TipoDesconocido:
-                    Console.WriteLine($"ProcesarMensaje -> Tipo de mensaje desconocido: {mensaje}");
-                    break;
+                using var reader = command.ExecuteReader();
+                if (reader.Read())
+                {
+                    // Asumimos que el resultado es un long
+                    numeroEvento = reader.GetInt64(0);
+                }
+                else
+                {
+                    // Si no hay resultado, lo dejo vacio
+                    numeroEvento = -1; // o cualquier valor que indique error
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"Error de PostgreSQL: {ex.Message}");
+                Console.WriteLine($"Detalles: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                numeroEvento = -1; // o cualquier valor que indique error
             }
 
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al conectar a la base de datos: {ex.Message}");
+                Console.WriteLine($"Detalles: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                numeroEvento = -1; // o cualquier valor que indique error
+            }
+
+            Console.WriteLine($"CargarEvento -> Evento cargado con numero: {numeroEvento}");
+            if (numeroEvento > 0)
+            {
+                string mensaje = JsonConvert.SerializeObject(payloadBase, Formatting.Indented);
+                switch (tipoMensaje)
+                {
+                    case eTipoMensaje.GNSS:
+                        //
+                        //Hago la traduccion de datos crudos del rastreado y los cargo en la base
+                        Ubicacion ubicacion = new Ubicacion();
+                        infoTorreCelulares.Add(new InfoCell(payloadBase.CellInfo));
+                        BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
+                        //TODO: refactorizar
+                        CargarDatosRastreador(ref ubicacion, mensaje);
+                        CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
+                        CargarUbicacion(ubicacion, numeroEvento);
+                        break;
+
+                    case eTipoMensaje.InfoCell:
+                        //
+                        CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
+                        BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
+                        CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
+                        break;
+
+                    case eTipoMensaje.TipoDesconocido:
+                        Console.WriteLine($"ProcesarMensaje -> Tipo de mensaje desconocido: {mensaje}");
+                        break;
+                }
+            }
+            return numeroEvento;
         }
 
         #region Torres Celulares
@@ -258,7 +324,7 @@ namespace ServidorTCP
         /// obtiene un numero de registro y carga los infocell
         /// </summary>
         /// <param name="listaInfoCell"></param>
-        private void CargarListaRegistroTorreCelular(ref List<InfoCell> listaInfoCell)
+        private void CargarListaRegistroTorreCelular(ref List<InfoCell> listaInfoCell, long numeroEvento)
         {
             Guid numeroReporte = Guid.Empty;
 
@@ -273,7 +339,7 @@ namespace ServidorTCP
             {
                 foreach (InfoCell infoCell in listaInfoCell)
                 {
-                    CargarRegistroTorreCelular(infoCell, numeroReporte);
+                    CargarRegistroTorreCelular(infoCell, numeroReporte, numeroEvento);
                 }
             }
             else
@@ -287,7 +353,7 @@ namespace ServidorTCP
         /// Metodo encargado de cargar el registro de la torre celular en la base de datos
         /// </summary>
         /// <param name="infoCell"></param>
-        private void CargarRegistroTorreCelular(InfoCell infoCell, Guid numeroReporte)
+        private void CargarRegistroTorreCelular(InfoCell infoCell, Guid numeroReporte, long numeroEvento)
         {
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
@@ -303,10 +369,11 @@ namespace ServidorTCP
                 connection.Open();
 
                 // Comando del SP
-                using var command = new NpgsqlCommand("CALL cargar_ReporteCeldaCelular(@cell_id, @cell_mcc, @cell_mnc, @cell_lac, @cell_tecnologia, @cell_band, @cell_chanel, @cell_nivelsenial, @cell_timestamp, @numeroreporte, @cell_longitud, @cell_latitud, @id_registro, @id_dispositivo, @id_agente)", connection);
+                using var command = new NpgsqlCommand("CALL cargar_ReporteCeldaCelular(@cell_id, @cell_nroevento, @cell_mcc, @cell_mnc, @cell_lac, @cell_tecnologia, @cell_band, @cell_chanel, @cell_nivelsenial, @cell_timestamp, @numeroreporte, @cell_longitud, @cell_latitud, @id_registro, @id_dispositivo, @id_agente)", connection);
 
                 // Agrego los parametros
                 command.Parameters.AddWithValue("cell_id", Convert.ToInt64(infoCell.Cellid, 16)); //string de un hexadecimal
+                command.Parameters.AddWithValue("cell_nroevento", (long)numeroEvento);
                 command.Parameters.AddWithValue("cell_mcc", (long)infoCell.Mcc);
                 command.Parameters.AddWithValue("cell_mnc", (long)infoCell.Mnc);
                 command.Parameters.AddWithValue("cell_lac", Convert.ToInt64(infoCell.Lac, 16)); //string de un hexadecimal
@@ -417,7 +484,7 @@ namespace ServidorTCP
         #endregion
 
         #region Ubicacion GPS
-        private void CargarUbicacion(Ubicacion ubicacion)
+        private void CargarUbicacion(Ubicacion ubicacion, long numeroEvento)
         {
             // La idea es que el mensaje sea un objeto JSON con la siguiente estructura
             // Uso UUID fijos para las pruebas inicialies, solo recibo la latitud y longitud en un principio
@@ -435,9 +502,10 @@ namespace ServidorTCP
                 using var connection = new NpgsqlConnection(_connectionString);
                 connection.Open();
 
-                using var command = new NpgsqlCommand("CALL cargar_ubicacion(@idRegistro, @idDispositivo, @latitud, @longitud, @ubiTimestamp, @agenteID)", connection);
+                using var command = new NpgsqlCommand("CALL cargar_ubicacion(@idRegistro, @idDispositivo, @numero_evento, @latitud, @longitud, @ubiTimestamp, @agenteID)", connection);
                 command.Parameters.AddWithValue("idRegistro", idRegistro);
                 command.Parameters.AddWithValue("idDispositivo", idDispositivo);
+                command.Parameters.AddWithValue("numero_evento", (long)numeroEvento);
                 command.Parameters.AddWithValue("latitud", latitud);
                 command.Parameters.AddWithValue("longitud", longitud);
                 command.Parameters.AddWithValue("ubiTimestamp", ubiTimestamp);
