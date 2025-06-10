@@ -159,12 +159,12 @@ namespace ServidorTCP
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
             // Aca deberia cargar el evento en la base de datos y devolver el numero de evento
             long numeroEvento;
-            DateTime fechaMensaje = payloadBase.DateTime.ToUniversalTime();
+            DateTime fechaMensaje = DateTime.UtcNow;//payloadBase.DateTime.ToUniversalTime();
             eTipoMensaje tipoMensaje = payloadBase.GetTipoMensaje();
-            string JsonEstadoBateria = "JSON de estado bateria";
-            string JsonUbicacion = "JSON de GPS";
-            string JsonInfoCell = "JSON InfoCell";
-            string JsonGiroscopio = "JSON Giroscopio";
+            string JsonEstadoBateria = "{\"Type\":\"BATERIA\"}";
+            string JsonUbicacion = "{\"Type\":\"GPS\"}";
+            string JsonInfoCell = "{\"Type\":\"INFOCELL\"}";
+            string JsonGiroscopio = "{\"Type\":\"INFO GIROSCOPIO\"}";
 
             try 
             {
@@ -176,11 +176,12 @@ namespace ServidorTCP
 
                 command.Parameters.AddWithValue("id_registro", idRegistro);
                 command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
-                command.Parameters.AddWithValue("estado_bateria", JsonEstadoBateria);
-                command.Parameters.AddWithValue("gpsInfo", JsonUbicacion);
-                command.Parameters.AddWithValue("gsmInfo", JsonInfoCell);
+                command.Parameters.AddWithValue("tipo_mensaje", Convert.ToInt16(tipoMensaje));
+                command.Parameters.AddWithValue("estado_bateria", NpgsqlDbType.Jsonb, JsonEstadoBateria);
+                command.Parameters.AddWithValue("gpsInfo", NpgsqlDbType.Jsonb, JsonUbicacion);
+                command.Parameters.AddWithValue("gsmInfo", NpgsqlDbType.Jsonb, JsonInfoCell);
                 command.Parameters.AddWithValue("fecha_mensaje", fechaMensaje);
-                command.Parameters.AddWithValue("giroscopioInfo", JsonGiroscopio);
+                command.Parameters.AddWithValue("giroscopioInfo", NpgsqlDbType.Jsonb, JsonGiroscopio);
 
                 using var reader = command.ExecuteReader();
                 if (reader.Read())
@@ -261,14 +262,6 @@ namespace ServidorTCP
                 infoTorreCelulares.Add(infoCellVecina);
             }
         }
-
-        List<string> parsearRegistros(string str)
-        {
-            //separo el mensaje completo en registros de cada torre celular recibida
-            string[] registros = { "tenemos que definir en que orden bienen los datos y que separa a cada torre" };
-            return registros.ToList();
-        }
-
         private void BuscarCoordenadasTorresCelulares(ref List<InfoCell> infoTorreCelulares)
         {
             Console.WriteLine($"Buscando coordenadas para la torre celular -> Inicio");

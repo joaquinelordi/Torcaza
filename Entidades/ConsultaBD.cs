@@ -11,5 +11,7 @@ namespace Entidades
         public DateTime FechaDesde { get; set; }
         public DateTime FechaHasta { get; set; }
         public int CantidadPuntosMaxima { get; set; }
+
+        public Guid NumeroReporte { get; set; }
     }
 }
