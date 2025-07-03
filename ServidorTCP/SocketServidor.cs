@@ -14,11 +14,13 @@ using Entidades;
 using System.Numerics;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping;
 using System;
+using NLog;
 
 namespace ServidorTCP
 {
     public class TcpServer
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly TcpListener _listener;
         private readonly string _connectionString;
         private int _port { get; set; }
@@ -39,6 +41,7 @@ namespace ServidorTCP
 
         public async Task StartAsync()
         {
+            _logger.Info($"Servidor TCP iniciado... {_ipAddress}:{_port}");
             Console.WriteLine($"Servidor TCP iniciado... {_ipAddress}:{_port}");
             _listener.Start();
 
@@ -79,7 +82,7 @@ namespace ServidorTCP
 
                         // Verificar si el mensaje completo ha sido recibido
                         if (messageBuilder.ToString().EndsWith("\n\0"))
-                        {
+                        {   
                             var mensajeCompleto = messageBuilder.ToString();
                             Console.WriteLine($"Mensaje recibido: {mensajeCompleto}");
                             //quito el \n del final
@@ -124,6 +127,7 @@ namespace ServidorTCP
         {
             Console.WriteLine($"ProcesarMensaje -> Inicio: {buffer}");
             string mensaje = "";
+            //buffer = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoiTU5NTiIsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiI2MUVCRDAyIiwiU0xWTCI6LTYzLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwNDA2MjUxOTQzMjkiLCJCU1RBIjowLCJCTFZMIjo4MCwiU0lNVSI6MCwiQVgiOjAuMDEsIkFZIjowLjAyLCJBWiI6MCwiWUFXIjotMTEzLjI5LCJST0xMIjotMi4wNSwiUFRDSCI6LTUuOTMsIk5laWdoYm9ycyI6W3siVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiJBNzY4IiwiU0xWTCI6LTY3fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMSIsIlNMVkwiOi02OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REUiLCJTTFZMIjotNzB9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNzNEIiwiU0xWTCI6LTc1fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMiIsIlNMVkwiOi03NX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REYiLCJTTFZMIjotNzd9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNjZCIiwiU0xWTCI6LTc5fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0EyM0QwMSIsIlNMVkwiOi05Mn0seyJURUNIIjo0LCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiM0IwMiIsIkNJRCI6IjdBMTJFMEUiLCJTTFZMIjotOTR9LHsiVEVDSCI6NCwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjNCMDIiLCJDSUQiOiI3QTIzRDAxIiwiU0xWTCI6LTk1fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0ExMkUwNiIsIlNMVkwiOi05OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozMTAsIkxBQyI6IjFCRDciLCJDSUQiOiI2OEE3IiwiU0xWTCI6LTc3fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMSIsIkNJRCI6IjRDMjA1IiwiU0xWTCI6LTgyfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMiIsIkNJRCI6IjQ4NjAyIiwiU0xWTCI6LTg3fV19.KTE0NZbVORx0IsuUvVR3jCh7tdV3cHahOQ4Qlle3G3o"; 
 
             // El mensaje puede ser un JWT, debo extraer el payload de ser necesario
             if (_handlerJWT.EsJWTValido(buffer))
@@ -151,7 +155,20 @@ namespace ServidorTCP
             long numeroEvento = CargarEvento(payloadBase);    
         }
 
-        long CargarEvento(TrackerPayloadBase payloadBase)
+        public void ProcesarMensajeExterno(string buffer)
+        {
+            // la idea es que se estraiga del body de un HTTP POST y se pase al metodo el jwt o el json que se envie desde un cliente externo
+            Console.WriteLine($"ProcesarMensajeExterno -> Inicio: {buffer}");
+            ProcesarMensaje(buffer);
+            
+        }
+
+        /// <summary>
+        /// Metodo encargado de cargar el evento en la base de datos y devolver el numero de evento
+        /// </summary>
+        /// <param name="payloadBase"></param>
+        /// <returns></returns>
+        public long CargarEvento(TrackerPayloadBase payloadBase)
         {
             List<InfoCell> infoTorreCelulares = new List<InfoCell>();
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
@@ -233,6 +250,8 @@ namespace ServidorTCP
                         //
                         CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
+                        // TODO: por ahora solo calculo un radio unico para cada torre celular
+                        CalcularRadioTorreCelular(ref infoTorreCelulares);
                         CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
                         break;
 
@@ -313,6 +332,47 @@ namespace ServidorTCP
                 }
             }
         }
+
+        /// <summary>
+        /// Metodo encargado de calcular el radio de distancia a cada torre celular
+        /// </summary>
+        /// <param name="infoTorreCelulares"></param>
+        private void CalcularRadioTorreCelular(ref List<InfoCell> infoTorreCelulares)
+        {
+            _logger.Debug($"CalcularRadioTorreCelular -> Inicio");
+
+            foreach (var infoCell in infoTorreCelulares)
+            {
+                if (infoCell.IsInDatabase)
+                {
+                    // TODO, ahora a mano, luego un abstract factory para diferentes tipos de modelos
+                    HandlerCanalInalambrico handlerCanalInalambrico = new HandlerCanalInalambrico()
+                    {
+                        Banda = infoCell.Banda,
+                        TecnologiaAcceso = infoCell.TecnologiaAcceso,
+                        Canal = infoCell.Canal,
+                        SenialdB = infoCell.senialdB,
+                        Latitud = infoCell.Lat,
+                        Longitud = infoCell.Lon
+                    };
+
+                    // con el Handler calculo un radio de distancia a la torre celular, luego va a ser un objeto
+                    // que tenga mas informacion del calculo para sacar un intervalo de distancia y hacer anillor para triangulacion
+                    infoCell.Radio = handlerCanalInalambrico.CalcularDistanciaATorreCelular();
+                }
+                else
+                {
+                    // Radio vacio por defecto
+                    infoCell.Radio = " ";
+                }
+            }
+            _logger.Debug($"CalcularRadioTorreCelular -> Fin");
+        }
+
+
+
+
+
         /// <summary>
         /// obtiene un numero de registro y carga los infocell
         /// </summary>
