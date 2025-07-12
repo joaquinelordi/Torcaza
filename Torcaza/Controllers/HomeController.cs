@@ -4,7 +4,7 @@ namespace Torcaza.Controllers
 {
 
     [ApiController]
-    [Route("[controller]")] // La ruta será "/prueba"
+    [Route("api/prueba")] // La ruta será "/prueba"
     public class PruebaController : ControllerBase
     {
         [HttpGet] // Define una acción para manejar solicitudes GET

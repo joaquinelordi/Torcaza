@@ -19,6 +19,7 @@ namespace Torcaza.Controllers
         {
             using var reader = new StreamReader(Request.Body);
             var contenido = await reader.ReadToEndAsync();
+            contenido.Trim('\n');
 
             if (string.IsNullOrWhiteSpace(contenido))
                 return BadRequest("El body está vacío.");
@@ -30,7 +31,7 @@ namespace Torcaza.Controllers
                 return Ok(new
                 {
                     success = true,
-                    message = "Mensaje recibido y procesado por el servidor TCP."
+                    message = "Mensaje recibido y procesado por el Consejo del Mate. atte: chicho siesta."
                 });
             }
             catch (Exception ex)
