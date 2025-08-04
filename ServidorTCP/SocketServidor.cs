@@ -148,7 +148,7 @@ namespace ServidorTCP
                 mensaje = buffer;
                 Console.WriteLine($"ProcesarMensaje -> recibi un JSON, no un JWT: {mensaje}");
             }
-            TrackerPayloadBase payloadBase = JsonDeserializer.DeserializeJson(mensaje);
+            TrackerPayloadBase payloadBase = JsonDeserializer.DeserializeTrackerPayload(mensaje);
             eTipoMensaje accion = payloadBase.GetTipoMensaje();
 
             //Aca la idea es usar un enum con los tipos de acciones disponibles, enviado en el objeto del mensaje 
@@ -241,7 +241,7 @@ namespace ServidorTCP
                         infoTorreCelulares.Add(new InfoCell(payloadBase.CellInfo));
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
                         //TODO: refactorizar
-                        CargarDatosRastreador(ref ubicacion, mensaje);
+                        CargarDatosRastreador(ref ubicacion, payloadBase);
                         CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
                         CargarUbicacion(ubicacion, numeroEvento);
                         break;
@@ -299,6 +299,7 @@ namespace ServidorTCP
         /// <returns></returns>
         private async Task BuscarCoordenadasTorresCelularesAsync(List<InfoCell> infoTorreCelulares)
         {
+            int i = 0;
             foreach (var infoCell in infoTorreCelulares)
             {
                 try
@@ -319,6 +320,8 @@ namespace ServidorTCP
                         infoCell.Range = cellInfo.Range;
                         infoCell.IsInDatabase = true;
 
+                        i = i++;
+                        _logger.Debug($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
                         Console.WriteLine($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
                     }
                     else
@@ -331,6 +334,7 @@ namespace ServidorTCP
                     Console.WriteLine($"Error al buscar coordenadas para la torre: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}. Detalles: {ex.Message}");
                 }
             }
+            _logger.Debug($"Cantidad de coordenadas encontradas: [{0}]", i);
         }
 
         /// <summary>
@@ -358,7 +362,8 @@ namespace ServidorTCP
 
                     // con el Handler calculo un radio de distancia a la torre celular, luego va a ser un objeto
                     // que tenga mas informacion del calculo para sacar un intervalo de distancia y hacer anillor para triangulacion
-                    infoCell.Radio = handlerCanalInalambrico.CalcularDistanciaATorreCelular();
+                    //infoCell.Radio = handlerCanalInalambrico.CalcularDistanciaATorreCelular();
+                    infoCell.Radio = "0";
                 }
                 else
                 {
@@ -384,7 +389,7 @@ namespace ServidorTCP
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440002");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
 
             numeroReporte = ObtenerNumeroReporte(idRegistro, idDispositivo, agenteID);
 
@@ -411,7 +416,7 @@ namespace ServidorTCP
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440002");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
 
             // Convertimos la fecha y hora al formato UTC
             DateTime cellTimestamp = infoCell.FechaHora.ToUniversalTime();
@@ -544,11 +549,13 @@ namespace ServidorTCP
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
             var ubiTimestamp = DateTime.Now; //ubicacion.Timestamp;
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440002");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
 
             // Convertimos latitud y longitud a double
-            double latitud = double.Parse(ubicacion.Latitud, CultureInfo.InvariantCulture);
-            double longitud = double.Parse(ubicacion.Longitud, CultureInfo.InvariantCulture);
+            //double latitud = double.Parse(ubicacion.Latitud, CultureInfo.InvariantCulture);
+            //double longitud = double.Parse(ubicacion.Longitud, CultureInfo.InvariantCulture);
+            double latitud = ubicacion.Latitud;
+            double longitud = ubicacion.Longitud;
 
             try
             {
@@ -582,20 +589,37 @@ namespace ServidorTCP
             }
         }
 
-        private void CargarDatosRastreador(ref Ubicacion ubicacion, string str)
-        {
-            var campos = str.Split(',');
+        /*
+         // casteo el objeto, que ya se que es y asi inicializo infocell
+            CellNeighborsInfoPayload cellNeighborsInfo = oPayload as CellNeighborsInfoPayload;
 
-            // si cumple esto recibi un mensaje con coordenadas
-            if (campos.Length > 0 && campos[1] == "GNSS")
+            // inicializo el infocell a partir de la celda celular usada para transmitir
+            InfoCell infoCell = new InfoCell(cellNeighborsInfo.CellInfo);
+            // lo cargo en la lista a consultar
+            infoTorreCelulares.Add(infoCell);
+
+            //agrego a la lista las torres celulares vecinas
+            foreach (var cellInfo in cellNeighborsInfo.NeighborCells)
             {
-                ubicacion.Latitud = campos[2];
-                ubicacion.Longitud = campos[3];
-                Console.WriteLine($"Coordenadas GNSS [{ubicacion.Latitud};{ubicacion.Longitud}]");
+                InfoCell infoCellVecina = new InfoCell(cellInfo);
+                infoTorreCelulares.Add(infoCellVecina);
             }
-            else
+         */
+
+        private void CargarDatosRastreador(ref Ubicacion ubicacion, TrackerPayloadBase oPayload)
+        {
+            if (oPayload != null)
             {
-                Console.WriteLine("El mensaje no contiene datos GNSS");
+                try
+                {
+                    // casteo el objeto, que ya se que es y asi inicializo infocell
+                    GnssInfoPayload gnssInfoPayload = oPayload as GnssInfoPayload;
+                    ubicacion = new Ubicacion(gnssInfoPayload);
+                }
+                catch (Exception e)
+                {
+                    _logger.Error($"Error al cargar DatosRastreador: {e.Message}");
+                }
             }
         }
 
@@ -604,5 +628,116 @@ namespace ServidorTCP
         {
             _listener.Stop();
         }
+
+        #region Cerco Virtual
+        /// <summary>
+        /// Metodo encargado de cargar los cercos virtuales en la base de datos
+        /// </summary>
+        /// <param name="cercos"></param>
+        public void CargarEventoCercoVirtual(List<ICercoVirtual> cercos)
+        {
+            if (cercos == null || cercos.Count == 0)
+            {
+                _logger.Debug("CargarEventoCercoVirtual -> No se recibieron cercos virtuales para cargar.");
+                return;
+            }
+
+            _logger.Debug($"CargarEventoCercoVirtual -> Inicio, cantidad de cercos: {cercos.Count}");
+
+            try
+            {
+                var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 22185);
+
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+
+                foreach (var cerco in cercos)
+                {
+                    Geometry geom = null;
+                    string nombre = $"Cerco_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+
+                    switch (cerco)
+                    {
+                        case CercoCirculo circulo:
+                            // SRID 4326 (WGS84), las unidades son grados decimales (latitud/longitud).
+                            double radioGrados = circulo.Radio / 111320.0;
+                            var centro = geometryFactory.CreatePoint(new Coordinate(circulo.Lng, circulo.Lat));
+                            geom = centro.Buffer(radioGrados); // radio en grados
+                            break;
+
+                        case CercoRectangulo rect:
+                            var coords = new[]
+                            {
+                                new Coordinate(rect.SurOesteLng, rect.SurOesteLat),
+                                new Coordinate(rect.NorEsteLng, rect.SurOesteLat),
+                                new Coordinate(rect.NorEsteLng, rect.NorEsteLat),
+                                new Coordinate(rect.SurOesteLng, rect.NorEsteLat),
+                                new Coordinate(rect.SurOesteLng, rect.SurOesteLat)
+                            };
+                            geom = geometryFactory.CreatePolygon(coords);
+                            break;
+                    }
+
+                    if (geom != null)
+                    {
+                        using var cmd = new NpgsqlCommand(
+                            "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom) VALUES (@nombre, @geom)", connection);
+                        cmd.Parameters.AddWithValue("nombre", nombre);
+                        cmd.Parameters.AddWithValue("geom", geom);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                _logger.Error($"Error al cargar los cercos virtuales: {ex.Message}");
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Error al cargar cercos virtuales: {e.Message}");
+            }
+        }
+
+// Update the method to resolve the type mismatch issues by ensuring the correct types are used.  
+// The issue arises because `GeometryTransform.TransformGeometry` expects `IGeometryFactory` and `IGeometry` from GeoAPI,  
+// but the code is using `NetTopologySuite.Geometries.GeometryFactory` and `NetTopologySuite.Geometries.Geometry`.  
+// To fix this, ensure the correct namespaces and types are used.
+
+public static class GeometryUtils
+        {
+            public static Geometry Transform4326To22185(Geometry geometry4326)
+            {
+                if (geometry4326 == null) return null;
+
+                // Define los sistemas de coordenadas
+                var sourceCS = GeographicCoordinateSystem.WGS84;
+
+                // EPSG:22185 - POSGAR 2007 / Argentina 5 (Gauss-Kruger)
+                var targetCS = ProjectedCoordinateSystem.WGS84_UTM(21, true); // TEMPORAL: reemplazar con factory personalizado si necesitás precisión
+
+                var transformFactory = new CoordinateTransformationFactory();
+                var transformation = transformFactory.CreateFromCoordinateSystems(sourceCS, targetCS);
+                var mathTransform = transformation.MathTransform;
+
+                // Clona la geometría para transformarla
+                var coords = geometry4326.Coordinates;
+                for (int i = 0; i < coords.Length; i++)
+                {
+                    var transformed = mathTransform.Transform(new[] { coords[i].X, coords[i].Y });
+                    coords[i].X = transformed[0];
+                    coords[i].Y = transformed[1];
+                }
+
+                var factory = new GeometryFactory(new PrecisionModel(), 22185);
+                var transformedGeometry = factory.CreateGeometry(geometry4326);
+
+                return transformedGeometry;
+            }
+        }
+        #endregion
+
+        #region Alarmas
+
+        #endregion
     }
 }

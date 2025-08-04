@@ -26,6 +26,12 @@ namespace Entidades
         
         [JsonProperty("BLVL")]
         public int BateryLevel { get; set; }
+        
+        [JsonProperty("IMEI")]
+        public string Imei { get; set; }
+
+        [JsonProperty("EVNT")]
+        public string Evento;
 
         public eTipoMensaje GetTipoMensaje()
         {

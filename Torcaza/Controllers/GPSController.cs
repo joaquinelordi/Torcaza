@@ -89,9 +89,11 @@ namespace Torcaza.Controllers
 
                     var ubicacion = new Ubicacion
                     {
-                        IDAgente = "550e8400-e29b-41d4-a716-446655440002", // Ajustar según sea necesario
-                        Latitud = Math.Round(latitud, 4).ToString(),
-                        Longitud = Math.Round(longitud, 4).ToString(),
+                        IDAgente = "550e8400-e29b-41d4-a716-446655440003", // Ajustar según sea necesario
+                        //Latitud = Math.Round(latitud, 4).ToString(),
+                        //Longitud = Math.Round(longitud, 4).ToString(),
+                        Latitud = Math.Round(latitud, 4),
+                        Longitud = Math.Round(longitud, 4),
                         Timestamp = timestamp
                     };
 
