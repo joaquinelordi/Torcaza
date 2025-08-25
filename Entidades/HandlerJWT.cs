@@ -19,9 +19,10 @@ namespace Entidades
             _secret = configuration["JwtSettings:Secret"];
             if (string.IsNullOrEmpty(_secret))
             {
-                Console.WriteLine("El secret no está configurado en appsettings.json");
+                _secret = "";
+                Console.WriteLine("El secret no está configurado en secrets.json");
             }
-            _secret = "a-string-secret-at-least-256-bits-long";
+
         }
 
 

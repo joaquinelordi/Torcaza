@@ -1,6 +1,10 @@
 ﻿using Entidades;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using NLog;
 using ServidorTCP;
+using Microsoft.AspNetCore.SignalR;
+using Torcaza.Hubs;
 
 namespace Torcaza.Controllers
 {
@@ -10,26 +14,106 @@ namespace Torcaza.Controllers
     {
         private readonly TcpServer _tcpServer;
         private readonly HandlerJWT _handlerJWT;
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly CapaComunicacionAppCliente _appCliente;
+        private readonly IHubContext<AlertasHub> _hubContext;
+        private readonly NotificadorTelegramBot _notificadorTelegramBot;
 
-        public CapaComunicacionAplicacionController(TcpServer tcpServer, HandlerJWT handlerJWT)
+        public CapaComunicacionAplicacionController(TcpServer tcpServer, HandlerJWT handlerJWT, CapaComunicacionAppCliente appCliente, IHubContext<AlertasHub> hubContext, NotificadorTelegramBot notificadorTelegramBot)
         {
             _tcpServer = tcpServer;
             _handlerJWT = handlerJWT;
+            _appCliente = appCliente;
+            _hubContext = hubContext;
+            _notificadorTelegramBot = notificadorTelegramBot;
+
+            _logger.Debug("CapaComunicacionAplicacionController inicializado.");
         }
 
+        /// <summary>
+        /// Procesa un mensaje enviado por dispositivos rastreadores
+        /// </summary>
+        /// <returns></returns>
         [HttpPost("envio")]
         public async Task<IActionResult> ProcesarMensaje()
         {
             using var reader = new StreamReader(Request.Body);
             var contenido = await reader.ReadToEndAsync();
+            //GPS
+            //contenido = "eyJhbGciOiAiSFMyNTYiLCJ0eXAiOiJKV1QifQ.eyJUeXBlIjoiTU5HTlNTIiwiSU1FSSI6ODY4NDUwMDQxNzMzNzE2LCJFVk5UIjoiUEFSS0lORyIsIkxBVCI6LTM0LjYyNTc0MCwiTE9ORyI6LTU4LjM2OTQxMSwiSERPUCI6MS4xMCwiQUxUIjoxMS44MCwiQ09HIjowLjAwLCJTUEQiOjAuMDAsIk1OQyI6NywiTUNDIjo3MjIsIkxBQyI6IjExQ0MiLCJDSUQiOiI1QjU1QzAzIiwiU0xWTCI6LTUxLjAwLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwMzA4MjUxOTQ4NTciLCJCU1RBIjowLCJCTFZMIjo4OCwiU0lNVSI6MywiQVgiOi0wLjAyLCJBWSI6MC4wMCwiQVoiOi0wLjAyLCJZQVciOi0xNjkuMzYsIlJPTEwiOi0xLjQwLCJQVENIIjotOS4zNH0.BFAQbuKCxQRxKuuOiyTPsxBc7yygfKAMnmvwLz4rQKs";
             contenido = contenido.Trim('\r','\n');
 
             if (string.IsNullOrWhiteSpace(contenido))
                 return BadRequest("El body está vacío.");
-
+            _logger.Debug("Mensaje JWT Recibido: {0}", contenido);
             try
             {
-                _tcpServer.ProcesarMensajeExterno(contenido);
+                //DESCOMENTAR PARA PROCESAR LOS ENVIOS DESDE EL DISPOSITIVO
+                //_tcpServer.ProcesarMensajeExterno(contenido);
+
+                var mensaje = "Alerta: Entró el chorro, ¡pero NO lo podes amasijar en el patio!";
+
+                await _hubContext.Clients.All.SendAsync("RecibirAlerta", mensaje);
+
+                var chatIdsActivos = _notificadorTelegramBot.GetChatIdsActivos();
+
+                foreach (var chatId in chatIdsActivos)
+                {
+                    _logger.Debug("Enviando notificación a Telegram al chatId: {0}", chatId);
+                    var notificadorTelegram = new NotificadorTelegram(_notificadorTelegramBot, chatId.ToString());
+                    await notificadorTelegram.EnviarNotificacionAsync(mensaje);
+                }
+
+                // armo respuesta al cliente/dispositivo
+                var respuesta = new RespuestaEstado
+                {
+                    Success = true,
+                    Latency = eLatencia.MuyBaja,
+                    Mode = eModoOperacion.Persecucion,
+                    Timer = null // Solo se asigna valor para el modo SLEEP
+                };
+
+
+                string payload = _handlerJWT.CrearToken(respuesta.ToDictionary());
+                _logger.Debug("Mensaje JWT: {0}", payload);
+
+                return Content(payload, "text/plain");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error al procesar el mensaje.",
+                    error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        [HttpPost("cercosVirtuales")]
+        public async Task<IActionResult>  ProcesarCercosVirtuales()
+        {
+            try
+            {
+                using var reader = new StreamReader(Request.Body);
+                var contenido = await reader.ReadToEndAsync();
+                contenido = contenido.Trim('\r', '\n');
+
+                if (string.IsNullOrWhiteSpace(contenido))
+                    return BadRequest("El body está vacío.");
+
+                var payloadRecibido = JsonDeserializer.DeserializeJson<CercosPayload>(contenido);
+                var cercos = payloadRecibido?.Cercos;
+
+
+                //ValidarPrecondicionesCercoVirtual(contenido);
+                _tcpServer.CargarEventoCercoVirtual(cercos);
+                //SOLO TEST
+                //_tcpServer.TestActualizarEstadoSeguimiento();
 
                 var sJson = new Dictionary<string, object>
                 {
@@ -39,19 +123,17 @@ namespace Torcaza.Controllers
                 };
 
                 string payload = _handlerJWT.CrearToken(sJson);
+                _logger.Debug("Mensaje JWT: {0}", payload);
 
-                return Ok(new
-                {
-                    payload
-                });
+                return Content(payload, "application/json");
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = "Error al procesar el mensaje.",
-                    error = ex.Message
+                    message = "Error al procesar cerco virtual.",
+                    error = e.Message
                 });
             }
         }

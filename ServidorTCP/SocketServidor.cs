@@ -1,20 +1,24 @@
 ﻿using System.Text;
 using System.Net;
 using System.Net.Sockets;
-using Npgsql;
-using Newtonsoft.Json;
-using Entidades;
-using NpgsqlTypes;
-using NetTopologySuite.Geometries;
-using NetTopologySuite.IO;
-using NetTopologySuite;
 using System.Globalization;
 using System.Diagnostics;
-using Entidades;
-using System.Numerics;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping;
-using System;
 using NLog;
+using Newtonsoft.Json;
+using Entidades;
+using Npgsql;
+using NpgsqlTypes;
+using NetTopologySuite.Geometries;
+using NetTopologySuite;
+using NetTopologySuite.CoordinateSystems.Transformations;
+using ProjNet.CoordinateSystems;
+using ProjNet.CoordinateSystems.Transformations;
+using NetTopologySuite.Geometries;
+using NetTopologySuite;
+using ProjNet.CoordinateSystems;
+using ProjNet.CoordinateSystems.Transformations;
+
+
 
 namespace ServidorTCP
 {
@@ -82,7 +86,7 @@ namespace ServidorTCP
 
                         // Verificar si el mensaje completo ha sido recibido
                         if (messageBuilder.ToString().EndsWith("\n\0"))
-                        {   
+                        {
                             var mensajeCompleto = messageBuilder.ToString();
                             Console.WriteLine($"Mensaje recibido: {mensajeCompleto}");
                             //quito el \n del final
@@ -152,7 +156,7 @@ namespace ServidorTCP
             eTipoMensaje accion = payloadBase.GetTipoMensaje();
 
             //Aca la idea es usar un enum con los tipos de acciones disponibles, enviado en el objeto del mensaje 
-            long numeroEvento = CargarEvento(payloadBase);    
+            long numeroEvento = CargarEvento(payloadBase);
         }
 
         public void ProcesarMensajeExterno(string buffer)
@@ -160,7 +164,7 @@ namespace ServidorTCP
             // la idea es que se estraiga del body de un HTTP POST y se pase al metodo el jwt o el json que se envie desde un cliente externo
             Console.WriteLine($"ProcesarMensajeExterno -> Inicio: {buffer}");
             ProcesarMensaje(buffer);
-            
+
         }
 
         /// <summary>
@@ -172,7 +176,7 @@ namespace ServidorTCP
         {
             List<InfoCell> infoTorreCelulares = new List<InfoCell>();
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
-            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
             // Aca deberia cargar el evento en la base de datos y devolver el numero de evento
             long numeroEvento;
@@ -183,7 +187,7 @@ namespace ServidorTCP
             string JsonInfoCell = "{\"Type\":\"INFOCELL\"}";
             string JsonGiroscopio = "{\"Type\":\"INFO GIROSCOPIO\"}";
 
-            try 
+            try
             {
                 using var connection = new NpgsqlConnection(_connectionString);
                 connection.Open();
@@ -387,9 +391,9 @@ namespace ServidorTCP
             Guid numeroReporte = Guid.Empty;
 
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
-            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
 
             numeroReporte = ObtenerNumeroReporte(idRegistro, idDispositivo, agenteID);
 
@@ -414,9 +418,9 @@ namespace ServidorTCP
         private void CargarRegistroTorreCelular(InfoCell infoCell, Guid numeroReporte, long numeroEvento)
         {
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
-            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
 
             // Convertimos la fecha y hora al formato UTC
             DateTime cellTimestamp = infoCell.FechaHora.ToUniversalTime();
@@ -508,7 +512,7 @@ namespace ServidorTCP
                 command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
                 command.Parameters.AddWithValue("id_agente", agenteID);
 
-                
+
                 using var reader = command.ExecuteReader();
                 if (reader.Read())
                 {
@@ -546,10 +550,11 @@ namespace ServidorTCP
         {
             // La idea es que el mensaje sea un objeto JSON con la siguiente estructura
             // Uso UUID fijos para las pruebas inicialies, solo recibo la latitud y longitud en un principio
-            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440000");
+            var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
             var ubiTimestamp = DateTime.Now; //ubicacion.Timestamp;
-            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440003");
+            var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
+            ubicacion.IDAgente = agenteID.ToString();
 
             // Convertimos latitud y longitud a double
             //double latitud = double.Parse(ubicacion.Latitud, CultureInfo.InvariantCulture);
@@ -572,7 +577,20 @@ namespace ServidorTCP
                 command.Parameters.AddWithValue("agenteID", agenteID);
                 command.ExecuteNonQuery();
 
-                Console.WriteLine($"CargarUbicacion -> Carga exitosa");
+                _logger.Debug($"CargarUbicacion -> Carga exitosa");
+
+                //Si lo pude cargar chequeo el tema de alertas
+                if(ActualizarEstadoSeguimiento(ubicacion))
+                {
+                    _logger.Debug($"CargarUbicacion -> Estado de seguimiento actualizado correctamente.");
+                    
+                }
+                else
+                {
+                    _logger.Warn($"CargarUbicacion -> No se pudo actualizar el estado de seguimiento.");
+                }
+
+
             }
             catch (NpgsqlException ex)
             {
@@ -588,23 +606,6 @@ namespace ServidorTCP
                 Console.WriteLine($"Stack Trace: {ex.StackTrace}");
             }
         }
-
-        /*
-         // casteo el objeto, que ya se que es y asi inicializo infocell
-            CellNeighborsInfoPayload cellNeighborsInfo = oPayload as CellNeighborsInfoPayload;
-
-            // inicializo el infocell a partir de la celda celular usada para transmitir
-            InfoCell infoCell = new InfoCell(cellNeighborsInfo.CellInfo);
-            // lo cargo en la lista a consultar
-            infoTorreCelulares.Add(infoCell);
-
-            //agrego a la lista las torres celulares vecinas
-            foreach (var cellInfo in cellNeighborsInfo.NeighborCells)
-            {
-                InfoCell infoCellVecina = new InfoCell(cellInfo);
-                infoTorreCelulares.Add(infoCellVecina);
-            }
-         */
 
         private void CargarDatosRastreador(ref Ubicacion ubicacion, TrackerPayloadBase oPayload)
         {
@@ -634,7 +635,7 @@ namespace ServidorTCP
         /// Metodo encargado de cargar los cercos virtuales en la base de datos
         /// </summary>
         /// <param name="cercos"></param>
-        public void CargarEventoCercoVirtual(List<ICercoVirtual> cercos)
+        public void CargarEventoCercoVirtual(List<CercoVirtualBase> cercos)
         {
             if (cercos == null || cercos.Count == 0)
             {
@@ -646,9 +647,12 @@ namespace ServidorTCP
 
             try
             {
-                var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 22185);
+                var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+                var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
+                dataSourceBuilder.UseNetTopologySuite();
+                var dataSource = dataSourceBuilder.Build();
 
-                using var connection = new NpgsqlConnection(_connectionString);
+                using var connection = dataSource.OpenConnection();
                 connection.Open();
 
                 foreach (var cerco in cercos)
@@ -662,11 +666,11 @@ namespace ServidorTCP
                             // SRID 4326 (WGS84), las unidades son grados decimales (latitud/longitud).
                             double radioGrados = circulo.Radio / 111320.0;
                             var centro = geometryFactory.CreatePoint(new Coordinate(circulo.Lng, circulo.Lat));
-                            geom = centro.Buffer(radioGrados); // radio en grados
+                            var geomGPS = centro.Buffer(radioGrados); // radio en grados
                             break;
 
                         case CercoRectangulo rect:
-                            var coords = new[]
+                            var coordsGPS = new[]
                             {
                                 new Coordinate(rect.SurOesteLng, rect.SurOesteLat),
                                 new Coordinate(rect.NorEsteLng, rect.SurOesteLat),
@@ -674,17 +678,20 @@ namespace ServidorTCP
                                 new Coordinate(rect.SurOesteLng, rect.NorEsteLat),
                                 new Coordinate(rect.SurOesteLng, rect.SurOesteLat)
                             };
-                            geom = geometryFactory.CreatePolygon(coords);
+                            geom = geometryFactory.CreatePolygon(coordsGPS);
                             break;
                     }
 
                     if (geom != null)
                     {
                         using var cmd = new NpgsqlCommand(
-                            "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom) VALUES (@nombre, @geom)", connection);
+                            "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom_4326) VALUES (@nombre, @geom)", connection);
                         cmd.Parameters.AddWithValue("nombre", nombre);
                         cmd.Parameters.AddWithValue("geom", geom);
                         cmd.ExecuteNonQuery();
+
+                        //grabar tabla dispositivo_cerco
+
                     }
                 }
             }
@@ -697,47 +704,112 @@ namespace ServidorTCP
                 _logger.Error($"Error al cargar cercos virtuales: {e.Message}");
             }
         }
-
-// Update the method to resolve the type mismatch issues by ensuring the correct types are used.  
-// The issue arises because `GeometryTransform.TransformGeometry` expects `IGeometryFactory` and `IGeometry` from GeoAPI,  
-// but the code is using `NetTopologySuite.Geometries.GeometryFactory` and `NetTopologySuite.Geometries.Geometry`.  
-// To fix this, ensure the correct namespaces and types are used.
-
-public static class GeometryUtils
-        {
-            public static Geometry Transform4326To22185(Geometry geometry4326)
-            {
-                if (geometry4326 == null) return null;
-
-                // Define los sistemas de coordenadas
-                var sourceCS = GeographicCoordinateSystem.WGS84;
-
-                // EPSG:22185 - POSGAR 2007 / Argentina 5 (Gauss-Kruger)
-                var targetCS = ProjectedCoordinateSystem.WGS84_UTM(21, true); // TEMPORAL: reemplazar con factory personalizado si necesitás precisión
-
-                var transformFactory = new CoordinateTransformationFactory();
-                var transformation = transformFactory.CreateFromCoordinateSystems(sourceCS, targetCS);
-                var mathTransform = transformation.MathTransform;
-
-                // Clona la geometría para transformarla
-                var coords = geometry4326.Coordinates;
-                for (int i = 0; i < coords.Length; i++)
-                {
-                    var transformed = mathTransform.Transform(new[] { coords[i].X, coords[i].Y });
-                    coords[i].X = transformed[0];
-                    coords[i].Y = transformed[1];
-                }
-
-                var factory = new GeometryFactory(new PrecisionModel(), 22185);
-                var transformedGeometry = factory.CreateGeometry(geometry4326);
-
-                return transformedGeometry;
-            }
-        }
+            
         #endregion
 
         #region Alarmas
+        public bool ActualizarEstadoSeguimiento(Ubicacion ubicacion)
+        {
+            bool bRet = false;
+            double latitud = ubicacion.Latitud;
+            double longitud = ubicacion.Longitud;
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    conn.Open();
+
+                    string sql = @"
+                            SELECT cerco_id
+                            FROM cercos_virtuales
+                            WHERE ST_Contains(
+                                cerco_geom_22185,
+                                ST_Transform(
+                                    ST_SetSRID(ST_MakePoint(@longitud, @latitud), 4326),
+                                    22185
+                                )
+                            )
+                            LIMIT 1;
+                        ";
+
+                    object result;
+                    using (var cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@latitud", latitud);
+                        cmd.Parameters.AddWithValue("@longitud", longitud);
+
+                        result = cmd.ExecuteScalar();
+                        result = result != null ? (int?)Convert.ToInt32(result) : null;
+                    }
+
+                    if (result != null)
+                    {
+                        bRet = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error al consultar la base de datos: " + ex.Message);
+                bRet = false;
+            }
+
+            return bRet;
+        }
+
+        public bool TestUbicacionDentroFueraDeCerco()
+        {
+            // Coordenadas del cerco cargado
+            // Rectángulo entre:
+            //   SurOeste: (-34.6372222393039, -58.36701393127442)
+            //   NorEste:  (-34.632278784157506, -58.36152076721192)
+
+            bool bRet = true;
+            // Punto dentro del cerco
+            double latDentro = -34.6345;
+            double lngDentro = -58.3640;
+            Ubicacion ubicacionDentro = new Ubicacion
+            {
+                Latitud = latDentro,
+                Longitud = lngDentro
+            };
+            // Punto fuera del cerco
+            double latFuera = -34.6380;
+            double lngFuera = -58.3700;
+            Ubicacion ubicacionFuera = new Ubicacion
+            {
+                Latitud = latFuera,
+                Longitud = lngFuera
+            };
+
+            try
+            {
+                bool estaDentro = ActualizarEstadoSeguimiento(ubicacionDentro);
+                if (!estaDentro)
+                {
+                    bRet = false;
+                    throw new Exception("Fallo: El punto dentro del cerco fue considerado fuera.");
+                }
+
+                bool estaFuera = ActualizarEstadoSeguimiento(ubicacionFuera);
+                if (estaFuera)
+                {
+                    bRet = false;
+                    throw new Exception("Fallo: El punto fuera del cerco fue considerado dentro.");
+                }
+
+                Console.WriteLine("TestActualizarEstadoSeguimiento pasó correctamente.");
+            }
+            catch (Exception ex)
+            {
+                bRet = false;
+                Console.WriteLine("Error en TestActualizarEstadoSeguimiento: " + ex.Message);
+            }
+            return bRet;
+        }
 
         #endregion
+
     }
 }

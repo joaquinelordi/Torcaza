@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
@@ -177,6 +178,33 @@ namespace Entidades
     }
 
     [JsonConverter(typeof(StringEnumConverter))]
+    public enum eModoOperacion
+    {
+        [EnumMember(Value = "NOPM")]
+        Normal,
+        [EnumMember(Value = "POPM")]
+        Persecucion,
+        [EnumMember(Value = "SOPM")]
+        Sleep
+    }
+
+    public enum eLatencia
+    {
+        [EnumMember(Value = "ELL")]
+        ExtramadamenteBaja,
+        [EnumMember(Value = "VLL")]
+        MuyBaja,
+        [EnumMember(Value = "LL")]
+        Baja,
+        [EnumMember(Value = "ML")]
+        Media,
+        [EnumMember(Value = "HL")]
+        Alta,
+        [EnumMember(Value = "VHL")]
+        MuyAlta
+    }
+
+    [JsonConverter(typeof(StringEnumConverter))]
     public enum eTipoMensaje
     {
         [EnumMember(Value = "MNMN")]
@@ -186,5 +214,42 @@ namespace Entidades
         GNSS,
 
         TipoDesconocido = 99
+    }
+
+    public class RespuestaEstado
+    {
+        [JsonProperty("SUCS")]
+        public bool Success { get; set; }
+
+        [JsonProperty("LTCY")]
+        public eLatencia Latency { get; set; }
+
+        [JsonProperty("MODE")]
+        public eModoOperacion Mode { get; set; }
+
+        [JsonProperty("TSOPM", NullValueHandling = NullValueHandling.Ignore)]
+        public int? Timer { get; set; }
+
+        public Dictionary<string, object> ToDictionary()
+        {
+            var dict = new Dictionary<string, object>();
+            var props = GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var prop in props)
+            {
+                var jsonProp = prop.GetCustomAttribute<JsonPropertyAttribute>();
+                var value = prop.GetValue(this);
+
+                if (jsonProp != null && jsonProp.NullValueHandling == NullValueHandling.Ignore && value == null)
+                    continue;
+
+                var key = jsonProp?.PropertyName ?? prop.Name;
+                dict[key] = value;
+            }
+            return dict;
+        }
+
+
+
     }
 }

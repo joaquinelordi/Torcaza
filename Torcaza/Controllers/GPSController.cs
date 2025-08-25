@@ -18,13 +18,6 @@ namespace Torcaza.Controllers
     {
         private readonly string _connectionSQLString = "Host=localhost;Database=pruebas_T1;Username=postgres;Password=Admin01";
 
-        [HttpPost]
-        [Route("prueba")]
-        public IActionResult PruebaPost([FromBody] Persona persona)
-        {
-            return Ok(persona.nombre);
-        }
-
         [HttpGet]
         [Route("prueba")]
         public IActionResult PruebaGet([FromQuery] ConsultaBD consulta)
