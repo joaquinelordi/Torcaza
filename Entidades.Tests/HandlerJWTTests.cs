@@ -28,7 +28,7 @@ namespace Entidades.Tests
             {"str", "123"}
         };
             var token = handler.CrearToken(payload);
-            Assert.True(handler.EsJWTValido(token));
+            Assert.True(handler.StringEsJWTValido(token));
         }
 
         [Theory]
@@ -37,7 +37,7 @@ namespace Entidades.Tests
         public void EsJWTValido_TokenInvalidoDevuelveFalse(string token)
         {
             var handler = CreateHandler();
-            Assert.False(handler.EsJWTValido(token));
+            Assert.False(handler.StringEsJWTValido(token));
         }
     }
 

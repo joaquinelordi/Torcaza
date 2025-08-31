@@ -2,9 +2,46 @@ using ServidorTCP;
 using Microsoft.Extensions.Configuration;
 using System.Configuration;
 using System.Net;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Entidades;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 
 var builder = WebApplication.CreateBuilder(args);
+
+//Definicion de WebHost para usar Kestrel con http y https
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        
+        options.ListenAnyIP(5133);
+
+        options.ListenAnyIP(7089, listenOptions =>
+        {
+            listenOptions.UseHttps(https =>
+            {
+                https.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+                https.CheckCertificateRevocation = false;
+            });
+        });
+    });
+}
+else
+{
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.Listen(IPAddress.Any, 8080);
+        options.Listen(IPAddress.Any, 443, listenOptions =>
+        {
+            var certPath = builder.Configuration["Kestrel:Certificates:Default:Path"];
+            var certPassword = builder.Configuration["Kestrel:Certificates:Default:Password"];
+            listenOptions.UseHttps(certPath, certPassword);
+        });
+    });
+}
+
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -84,8 +121,26 @@ builder.Services.AddSingleton<NotificadorTelegramBot>(sp =>
     return new NotificadorTelegramBot(token);
 });
 
-// servicio que arranca el bot
+// servicio que arranca el bot de telegram
 builder.Services.AddHostedService<TelegramBotHostedService>();
+
+//Configuracion de autorizacion de conexiones
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("EncryptedOnly", policy =>
+        policy.RequireAssertion(context =>
+        {
+            if (context.Resource is HttpContext httpContext &&
+                httpContext.Connection.LocalPort == 8080)
+            {
+                return httpContext.Request.Headers.TryGetValue("X-Encrypted", out var value) &&
+                       value == "true";
+            }
+            return true;
+        }));
+});
+
+
 
 var app = builder.Build();
 
@@ -98,16 +153,15 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 
-//app.UseAuthorization();
 
-
+app.UseAuthorization();
 // Mapea el endpoint de SignalR
 app.UseCors();
-app.MapHub<Torcaza.Hubs.AlertasHub>("/hub/Alertas");
+app.MapHub<Torcaza.Hubs.AlertasHub>("/hub/Alertas").RequireAuthorization("EncryptedOnly");
 
 
 // Esto siempre va ultimo
-app.MapControllers();
+app.MapControllers().RequireAuthorization("EncryptedOnly");
 //Inicio servidor TCP
 var tcpService = app.Services.GetRequiredService<TcpServer>();
 
