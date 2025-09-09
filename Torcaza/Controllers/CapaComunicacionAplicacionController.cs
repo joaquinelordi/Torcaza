@@ -95,7 +95,7 @@ namespace Torcaza.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpPost("cercosVirtuales")]
-        public async Task<IActionResult>  ProcesarCercosVirtuales()
+        public async Task<IActionResult> ProcesarCercosVirtuales()
         {
             try
             {
@@ -118,7 +118,7 @@ namespace Torcaza.Controllers
                 var sJson = new Dictionary<string, object>
                 {
                     {"success", "true" },
-                    { "mensaje", "Mensaje recibido y procesado por el Consejo del Mate. atte: chicho siesta." },
+                    { "mensaje", "Cercos Virtuales cargados correctamente" },
                     { "codigoRespuesta", "12" }
                 };
 

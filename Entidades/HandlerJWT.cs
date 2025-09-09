@@ -23,6 +23,7 @@ namespace Entidades
     {
         private readonly string _secret;
         private CryptoHandler _crypto;
+        private readonly List<string> _claimsMetadata; 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public HandlerJWT(IConfiguration configuration)
@@ -36,6 +37,7 @@ namespace Entidades
                 _secret = "";
                 Console.WriteLine("El secret no está configurado en secrets.json");
             }
+            _claimsMetadata = new List<string> { "iss", "aud", "iat", "exp", "jti", "seq", "d", "prev", "curr" };
 
         }
 
@@ -113,15 +115,34 @@ namespace Entidades
                 return eEstadoJWT.ErrorDecodificacion;
             }
         }
-
+        /// <summary>
+        /// Valida las precondiciones de los claims de metadata y AEAD
+        /// </summary>
+        /// <param name="diccionarioClaims"></param>
+        /// <returns></returns>
         private eEstadoJWT ValidarPrecondicionesMetadata(Dictionary<string, object> diccionarioClaims)
         {
-            throw new NotImplementedException();
+            eEstadoJWT estado = eEstadoJWT.OK;
+
+            // Verificar que los claims obligatorios estén presentes
+            //Identificar identidad del emisor
+            
+
+
+            return estado;
         }
 
         /// <summary>
         /// Separa los claims de metadata y AEAD del payload principal
         /// Devuelve el payload canonico y en el parametro data quedan los claims de metadata y AEAD
+        /// iss = identidad el emisor
+        /// aud = url de destino, es para validar y descartar rapidamente
+        /// iat = unix time emision, fecha de emision del jwt (distinta de fecha de obtencion de datos de telemetria)
+        /// exp = unix time expiracion, fecha de expiracion del jwt (opcional)
+        /// seq = numero de secuencia del mensaje, contador incremental de cada dispositivo
+        /// d = SHA-256 del contenido canonizado (datos de tememetria como array de string)
+        /// prev = hash encadenado anterior (H_100) del payload de jwt en formato json 
+        /// curr = hash encadenado actual (H_101) del payload de jwt en formato json (todos los campos excepto curr)
         /// </summary>
         /// <param name="data"></param>
         /// <param name="claimsToRemove"></param>
@@ -129,9 +150,7 @@ namespace Entidades
         public Dictionary<string, object> ExtraerMetadata(ref Dictionary<string, object> data)
         {
             // TODO: almacenar en un .config los claims de metadata y AEAD
-            var claimsMetadata = new List<string> { "iss", "aud", "iat", "nbf", "exp", "jti", "seq", "ts", "d", "prev", "curr", "aad_sha256", "frame_kid" };
-
-            ExtraerClaims(ref data, claimsMetadata, out var claimsExtraidos);
+            ExtraerClaims(ref data, _claimsMetadata, out var claimsExtraidos);
 
             return claimsExtraidos;
         }
@@ -147,6 +166,7 @@ namespace Entidades
             claimsExtraidos = new Dictionary<string, object>();
             foreach (var claim in claimsAQuitar)
             {
+                // Si el claim existe en el diccionario, se copia y se elimina del original
                 if (data.ContainsKey(claim))
                 {
                     claimsExtraidos[claim] = data[claim];

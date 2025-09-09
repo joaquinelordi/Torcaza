@@ -131,20 +131,21 @@ namespace ServidorTCP
         {
             Console.WriteLine($"ProcesarMensaje -> Inicio: {buffer}");
             string mensaje = "";
+            string payload = "";
             //buffer = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoiTU5NTiIsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiI2MUVCRDAyIiwiU0xWTCI6LTYzLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwNDA2MjUxOTQzMjkiLCJCU1RBIjowLCJCTFZMIjo4MCwiU0lNVSI6MCwiQVgiOjAuMDEsIkFZIjowLjAyLCJBWiI6MCwiWUFXIjotMTEzLjI5LCJST0xMIjotMi4wNSwiUFRDSCI6LTUuOTMsIk5laWdoYm9ycyI6W3siVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiJBNzY4IiwiU0xWTCI6LTY3fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMSIsIlNMVkwiOi02OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REUiLCJTTFZMIjotNzB9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNzNEIiwiU0xWTCI6LTc1fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMiIsIlNMVkwiOi03NX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REYiLCJTTFZMIjotNzd9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNjZCIiwiU0xWTCI6LTc5fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0EyM0QwMSIsIlNMVkwiOi05Mn0seyJURUNIIjo0LCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiM0IwMiIsIkNJRCI6IjdBMTJFMEUiLCJTTFZMIjotOTR9LHsiVEVDSCI6NCwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjNCMDIiLCJDSUQiOiI3QTIzRDAxIiwiU0xWTCI6LTk1fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0ExMkUwNiIsIlNMVkwiOi05OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozMTAsIkxBQyI6IjFCRDciLCJDSUQiOiI2OEE3IiwiU0xWTCI6LTc3fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMSIsIkNJRCI6IjRDMjA1IiwiU0xWTCI6LTgyfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMiIsIkNJRCI6IjQ4NjAyIiwiU0xWTCI6LTg3fV19.KTE0NZbVORx0IsuUvVR3jCh7tdV3cHahOQ4Qlle3G3o"; 
 
             // El mensaje puede ser un JWT, debo extraer el payload de ser necesario
             if (_handlerJWT.StringEsJWTValido(buffer))
             {
-                var payload = _handlerJWT.ProcesarPayloadCompleto(buffer);
-                if (payload != null)
+                var estadoJWT = _handlerJWT.ProcesarPayloadCompleto(buffer,ref payload);
+                if (estadoJWT == eEstadoJWT.OK)
                 {
                     mensaje = payload;
-                    Console.WriteLine($"ProcesarMensaje -> Payload decodificado: {JsonConvert.SerializeObject(payload, Formatting.Indented)}");
+                    _logger.Debug($"ProcesarMensaje -> Payload decodificado: {JsonConvert.SerializeObject(payload, Formatting.Indented)}");
                 }
                 else
                 {
-                    Console.WriteLine($"ProcesarMensaje -> Error al decodificar el JWT: {buffer}");
+                    _logger.Debug($"ProcesarMensaje -> Error al decodificar el JWT: {estadoJWT.ToString()}");
                 }
             }
             else
@@ -646,7 +647,7 @@ namespace ServidorTCP
             _logger.Debug($"CargarEventoCercoVirtual -> Inicio, cantidad de cercos: {cercos.Count}");
 
             try
-            {
+            { 
                 var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
                 var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
                 dataSourceBuilder.UseNetTopologySuite();
@@ -657,6 +658,7 @@ namespace ServidorTCP
 
                 foreach (var cerco in cercos)
                 {
+                    int cercoId = 0;
                     Geometry geom = null;
                     string nombre = $"Cerco_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
 
@@ -684,14 +686,30 @@ namespace ServidorTCP
 
                     if (geom != null)
                     {
-                        using var cmd = new NpgsqlCommand(
-                            "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom_4326) VALUES (@nombre, @geom)", connection);
-                        cmd.Parameters.AddWithValue("nombre", nombre);
-                        cmd.Parameters.AddWithValue("geom", geom);
-                        cmd.ExecuteNonQuery();
+                        try
+                        {
+                            var dispositivoID = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
 
-                        //grabar tabla dispositivo_cerco
+                            // graba en cerco_virtuales
+                            using var cmdCerco = new NpgsqlCommand(
+                                "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom_4326) VALUES (@nombre, @geom) RETURNING cerco_id", connection);
+                            cmdCerco.Parameters.AddWithValue("nombre", nombre);
+                            cmdCerco.Parameters.AddWithValue("geom", geom);
+                            //Devuelve la primera columna de la insercion (cerco_id)
+                            cercoId = Convert.ToInt32(cmdCerco.ExecuteScalar());
 
+                            //grabar tabla dispositivo_cerco
+                            using var cmdDispCerco = new NpgsqlCommand(
+                                "INSERT INTO dispositivo_cerco (dc_disptoken_id, dc_cerco_id, dc_tipo_alerta) VALUES (@disptoken_id, @cerco_id, @tipo_alerta)", connection);
+                            cmdDispCerco.Parameters.AddWithValue("disptoken_id", dispositivoID);
+                            cmdDispCerco.Parameters.AddWithValue("cerco_id", cercoId);
+                            cmdDispCerco.Parameters.AddWithValue("tipo_alerta", 0); 
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error($"Error al insertar cerco virtual '{nombre}': {ex.Message}");
+                            continue; // saltar al siguiente cerco
+                        }
                     }
                 }
             }
