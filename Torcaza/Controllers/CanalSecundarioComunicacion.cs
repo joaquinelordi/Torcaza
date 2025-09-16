@@ -14,13 +14,12 @@ namespace Torcaza.Controllers
     public class CanalSecundarioComunicacion : Controller
     {
         private readonly HandlerJWT _handlerJWT;
-        private readonly CryptoHandler _crypto;
+        //private readonly CryptoHandler _crypto;
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public CanalSecundarioComunicacion(HandlerJWT handlerJWT, CryptoHandler CryptoHandler)
+        public CanalSecundarioComunicacion(HandlerJWT handlerJWT)
         {
             _handlerJWT = handlerJWT;
-            _crypto = CryptoHandler;
             _logger.Debug("CanalSecundarioComunicacion inicializado.");
         }
 
@@ -36,9 +35,12 @@ namespace Torcaza.Controllers
 
             try 
             {
-                //TODO:logica para desencriptar el mensaje (a futuro)
-                var contenido = _handlerJWT.Desencriptar(ref contenidoCifrado);
                 string payloadDatos = string.Empty;
+                string contenido = contenidoCifrado;
+                //TODO:logica para desencriptar el mensaje (a futuro)
+                if (!_handlerJWT.StringEsJWTValido(contenidoCifrado))
+                    contenido = _handlerJWT.Desencriptar(ref contenidoCifrado);
+
                 // Logica para validar y procesar el JWT
                 //Antes de sacar el JWT original hay que validar los claims de metadata
                 eEstadoJWT estado = _handlerJWT.ProcesarPayloadCompleto(contenido, ref payloadDatos);

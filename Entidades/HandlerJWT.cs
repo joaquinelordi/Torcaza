@@ -15,6 +15,9 @@ using Newtonsoft.Json.Linq;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Logging;
 using NLog;
+using Entidades.CapaComunicacionBDD;
+using System.Text.Json;
+using System.Buffers;
 
 namespace Entidades
 {
@@ -23,6 +26,7 @@ namespace Entidades
     {
         private readonly string _secret;
         private CryptoHandler _crypto;
+        private JwtRepositorioValidacion _jwtRepositorioValidacion;
         private readonly List<string> _claimsMetadata; 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -38,7 +42,13 @@ namespace Entidades
                 Console.WriteLine("El secret no está configurado en secrets.json");
             }
             _claimsMetadata = new List<string> { "iss", "aud", "iat", "exp", "jti", "seq", "d", "prev", "curr" };
+            _jwtRepositorioValidacion = new JwtRepositorioValidacion(GetClaimsMetadata());
 
+        }
+
+        private List<string> GetClaimsMetadata()
+        {
+            return _claimsMetadata;
         }
 
         /// <summary>
@@ -124,9 +134,13 @@ namespace Entidades
         {
             eEstadoJWT estado = eEstadoJWT.OK;
 
-            // Verificar que los claims obligatorios estén presentes
-            //Identificar identidad del emisor
-            
+            // Verifica que los claims obligatorios estén presentes
+            //Identifica identidad del emisor
+            if(!_jwtRepositorioValidacion.CumplePrecondiciones(diccionarioClaims))
+            {
+                estado = eEstadoJWT.ErrorMetadata;
+            }
+
 
 
             return estado;
@@ -238,6 +252,118 @@ namespace Entidades
         {
            return _crypto.DecryptAES(Convert.FromBase64String(sEncriptado));
         }
+
+        public static string CalcularCurrHash(string jsonPayload)
+        {
+            string jsonSinCurrCanonico;
+
+            using var doc = JsonDocument.Parse(jsonPayload, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow
+            });
+
+            // 
+            var buffer = new ArrayBufferWriter<byte>();
+            using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions
+            {
+                Indented = false,
+                SkipValidation = true
+            }))
+            {
+                WriteCanonicalValueExcludingCurr(writer, doc.RootElement);
+            }
+
+            // JSON canonizado SIN "curr" como string (útil para encadenamiento, logs, etc.)
+            jsonSinCurrCanonico = Encoding.UTF8.GetString(buffer.WrittenSpan);
+            _logger.Debug("JSON canonizado sin 'curr': {0}", jsonSinCurrCanonico);
+
+            // Hash SHA-256 sobre esos mismos bytes canonizados
+            Span<byte> hash = stackalloc byte[32];
+            SHA256.HashData(buffer.WrittenSpan, hash);
+
+            // Convertir el hash a Base64Url
+            string sHash = Convert.ToBase64String(hash.ToArray())
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+
+            return sHash;
+        }
+
+        // Escribe un valor JSON de forma canonizada, excluyendo la propiedad "curr" que se usa para comparar el resultado
+        private static void WriteCanonicalValueExcludingCurr(Utf8JsonWriter writer, JsonElement el)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    {
+                        writer.WriteStartObject();
+
+                        foreach (var p in el.EnumerateObject()
+                                            .Where(p => p.Name != "curr")
+                                            .OrderBy(p => p.Name, StringComparer.Ordinal))
+                        {
+                            writer.WritePropertyName(p.Name);
+                            WriteCanonicalValueExcludingCurr(writer, p.Value);
+                        }
+
+                        writer.WriteEndObject();
+                        break;
+                    }
+                case JsonValueKind.Array:
+                    {
+                        writer.WriteStartArray();
+                        foreach (var item in el.EnumerateArray())
+                            WriteCanonicalValueExcludingCurr(writer, item);
+                        writer.WriteEndArray();
+                        break;
+                    }
+                case JsonValueKind.String:
+                    writer.WriteStringValue(el.GetString());
+                    break;
+
+                case JsonValueKind.Number:
+                    {
+                        if (el.TryGetInt64(out long li))
+                        {
+                            writer.WriteRawValue(li.ToString(CultureInfo.InvariantCulture));
+                        }
+                        else if (el.TryGetDecimal(out decimal ld))
+                        {
+                            writer.WriteRawValue(ld.ToString("G", CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            double d = el.GetDouble();
+                            var s = d.ToString("R", CultureInfo.InvariantCulture);
+                            s = NormalizeExponent(s);
+                            writer.WriteRawValue(s);
+                        }
+                        break;
+                    }
+
+                case JsonValueKind.True: writer.WriteBooleanValue(true); break;
+                case JsonValueKind.False: writer.WriteBooleanValue(false); break;
+                case JsonValueKind.Null: writer.WriteNullValue(); break;
+
+                default:
+                    throw new NotSupportedException($"Tipo JSON no soportado: {el.ValueKind}");
+            }
+        }
+
+        private static string NormalizeExponent(string s)
+        {
+            int idx = s.IndexOf('E');
+            if (idx < 0) idx = s.IndexOf('e');
+            if (idx < 0) return s;
+
+            var pre = s[..idx];
+            var exp = s[(idx + 1)..];
+            if (exp.StartsWith("+")) exp = exp[1..];
+            return pre + "e" + exp;
+        }
+
     }
 
     public enum eEstadoJWT
