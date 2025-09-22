@@ -17,6 +17,8 @@ using NetTopologySuite.Geometries;
 using NetTopologySuite;
 using ProjNet.CoordinateSystems;
 using ProjNet.CoordinateSystems.Transformations;
+using Entidades.Interfaces;
+using System.Numerics;
 
 
 
@@ -243,7 +245,7 @@ namespace ServidorTCP
                         //
                         //Hago la traduccion de datos crudos del rastreado y los cargo en la base
                         Ubicacion ubicacion = new Ubicacion();
-                        infoTorreCelulares.Add(new InfoCell(payloadBase.CellInfo));
+                        infoTorreCelulares.Add(new InfoCell(payloadBase.CellInfoRemote));
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
                         //TODO: refactorizar
                         CargarDatosRastreador(ref ubicacion, payloadBase);
@@ -253,11 +255,13 @@ namespace ServidorTCP
 
                     case eTipoMensaje.InfoCell:
                         //
+                        Ubicacion ubicacionEstimada = new Ubicacion();
                         CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
                         // TODO: por ahora solo calculo un radio unico para cada torre celular
-                        CalcularRadioTorreCelular(ref infoTorreCelulares);
+                        EstimarUbicacion(ref infoTorreCelulares, ref ubicacionEstimada);
                         CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
+                        CargarUbicacion(ubicacionEstimada, numeroEvento);
                         break;
 
                     case eTipoMensaje.TipoDesconocido:
@@ -268,6 +272,14 @@ namespace ServidorTCP
             return numeroEvento;
         }
 
+        private void EstimarUbicacion(ref List<InfoCell> infoTorreCelulares, ref Ubicacion ubicacionEstimada)
+        {
+            IList<InfoCell> infoTorreCelularesAsIList = infoTorreCelulares;
+            List<RangoEstimado> rangosEstimados = (List<RangoEstimado>)CalcularRadioTorreCelular(ref infoTorreCelularesAsIList);
+
+            DatosSalida posicion = CalcularPosicion(rangosEstimados, ref infoTorreCelularesAsIList);
+        }
+
         #region Torres Celulares
         private void CargarDatosTorresCelulares(ref List<InfoCell> infoTorreCelulares, TrackerPayloadBase oPayload)
         {
@@ -275,7 +287,7 @@ namespace ServidorTCP
             CellNeighborsInfoPayload cellNeighborsInfo = oPayload as CellNeighborsInfoPayload;
 
             // inicializo el infocell a partir de la celda celular usada para transmitir
-            InfoCell infoCell = new InfoCell(cellNeighborsInfo.CellInfo);
+            InfoCell infoCell = new InfoCell(cellNeighborsInfo.CellInfoRemote);
             // lo cargo en la lista a consultar
             infoTorreCelulares.Add(infoCell);
 
@@ -346,10 +358,11 @@ namespace ServidorTCP
         /// Metodo encargado de calcular el radio de distancia a cada torre celular
         /// </summary>
         /// <param name="infoTorreCelulares"></param>
-        private void CalcularRadioTorreCelular(ref List<InfoCell> infoTorreCelulares)
+        private IList<RangoEstimado> CalcularRadioTorreCelular(ref IList<InfoCell> infoTorreCelulares)
         {
             _logger.Debug($"CalcularRadioTorreCelular -> Inicio");
-
+            List<RangoEstimado> rangoEstimados = new List<RangoEstimado>();
+            
             foreach (var infoCell in infoTorreCelulares)
             {
                 if (infoCell.IsInDatabase)
@@ -357,6 +370,7 @@ namespace ServidorTCP
                     // TODO, ahora a mano, luego un abstract factory para diferentes tipos de modelos
                     HandlerCanalInalambrico handlerCanalInalambrico = new HandlerCanalInalambrico()
                     {
+                        CelId = infoCell.Cellid,
                         Banda = infoCell.Banda,
                         TecnologiaAcceso = infoCell.TecnologiaAcceso,
                         Canal = infoCell.Canal,
@@ -364,11 +378,14 @@ namespace ServidorTCP
                         Latitud = infoCell.Lat,
                         Longitud = infoCell.Lon
                     };
+                    handlerCanalInalambrico.Inicializar();
 
                     // con el Handler calculo un radio de distancia a la torre celular, luego va a ser un objeto
-                    // que tenga mas informacion del calculo para sacar un intervalo de distancia y hacer anillor para triangulacion
-                    //infoCell.Radio = handlerCanalInalambrico.CalcularDistanciaATorreCelular();
-                    infoCell.Radio = "0";
+                    // que tenga mas informacion del calculo para sacar un intervalo de distancia y hacer anillo para triangulacion
+                    RangoEstimado rango = handlerCanalInalambrico.CalcularDistanciaATorreCelular();
+                    infoCell.Radio = rango.DistanciaM.ToString("F2");
+                    rangoEstimados.Add(rango);
+                    //infoCell.Radio = "0";
                 }
                 else
                 {
@@ -377,10 +394,43 @@ namespace ServidorTCP
                 }
             }
             _logger.Debug($"CalcularRadioTorreCelular -> Fin");
+            return rangoEstimados;
         }
 
+        private DatosSalida CalcularPosicion(IList<RangoEstimado> rangos, ref IList<InfoCell> infoTorreCelulares)
+        {
+            HandlerCanalInalambrico handlerCanalInalambrico = new HandlerCanalInalambrico();
+            handlerCanalInalambrico.Inicializar();
+            
+            List<InfoCell> torresCelularesEnDatabase = infoTorreCelulares.ToList().FindAll(t => t.IsInDatabase);
+            Dictionary<long,CellInfo> cell = new Dictionary<long, CellInfo>();
 
+            try
+            {
+                foreach (var torre in torresCelularesEnDatabase)
+                {
+                    CellInfo cellInfo = new CellInfo(
+                        Convert.ToInt64(torre.Cellid, 16),
+                        torre.Lon.HasValue ? torre.Lon.Value : 0.0,
+                        torre.Lat.HasValue ? torre.Lat.Value : 0.0,
+                        torre.TecnologiaAcceso,
+                        torre.Banda,
+                        torre.Canal,
+                        null,
+                        eTipoArea.Desconocido,
+                        torre.senialdB
+                    );
+                    cell.Add(cellInfo.CellId, cellInfo);
+                }
+            }
+            catch (Exception ex) 
+            {
+                _logger.Error($"CalcularPosicion -> Error armando el diccionario de torres celulares: {ex.Message}");
 
+            }
+            return handlerCanalInalambrico.CalcularPosicion(rangos, cell);
+
+        }
 
 
         /// <summary>

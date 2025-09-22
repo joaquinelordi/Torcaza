@@ -100,7 +100,7 @@ namespace Entidades
                 if (estado == eEstadoJWT.OK)
                 {
                     // Convertir el diccionario con el JWT de datos a un string JSON
-                    payloadDatos = JsonConvert.SerializeObject(diccionarioClaims, Formatting.Indented);
+                    payloadDatos = JsonConvert.SerializeObject(data, Formatting.Indented);
                 }
                 else
                 {
@@ -133,7 +133,8 @@ namespace Entidades
         private eEstadoJWT ValidarPrecondicionesMetadata(Dictionary<string, object> diccionarioClaims)
         {
             eEstadoJWT estado = eEstadoJWT.OK;
-
+            //TODO: quitar return temporal luego de activar la validacion y crear las tablas correspondientes en BDD 
+            return estado;
             // Verifica que los claims obligatorios estén presentes
             //Identifica identidad del emisor
             if(!_jwtRepositorioValidacion.CumplePrecondiciones(diccionarioClaims))

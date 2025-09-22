@@ -17,7 +17,7 @@ namespace Entidades
         public eTipoMensaje Type { get; set; }
 
         //Agrupa los datos de la celda celular de la que se trasmite el mensaje
-        public CellInfo CellInfo { get; set; }
+        public CellInfoRemote CellInfoRemote { get; set; }
 
         [JsonProperty("DATETIME")]
         public DateTime DateTime { get; set; }
@@ -40,7 +40,7 @@ namespace Entidades
         }
     }
 
-    public class CellInfo
+    public class CellInfoRemote
     {
         [JsonProperty("MCC")]
         public int Mcc { get; set; }
@@ -60,19 +60,16 @@ namespace Entidades
         public int Channel { get; set; }
         [JsonProperty("REGS")]
         public int Regs { get; set; }
-
-
-
     }
 
     public class CellNeighborsInfoPayload : TrackerPayloadBase
     {
         [JsonProperty("Neighbors")]
-        public List<CellInfo> NeighborCells { get; set; }
+        public List<CellInfoRemote> NeighborCells { get; set; }
         public CellNeighborsInfoPayload()
         {
             Type = eTipoMensaje.InfoCell;
-            NeighborCells = new List<CellInfo>(); 
+            NeighborCells = new List<CellInfoRemote>(); 
         }
     }
 
@@ -151,7 +148,7 @@ namespace Entidades
 
             if (payload is TrackerPayloadBase basePayload && jsonObject["MCC"] != null)
             {
-                basePayload.CellInfo = new CellInfo
+                basePayload.CellInfoRemote = new CellInfoRemote
                 {
                     Mcc = (int)jsonObject["MCC"],
                     Mnc = (int)jsonObject["MNC"],

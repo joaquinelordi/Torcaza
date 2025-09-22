@@ -53,7 +53,7 @@ namespace Entidades
         }
 
         //Contructor a partir de un CellInfo recibido  
-        public InfoCell(CellInfo cellInfo)
+        public InfoCell(CellInfoRemote cellInfo)
         {
             Mcc = cellInfo.Mcc;
             Mnc = cellInfo.Mnc;
