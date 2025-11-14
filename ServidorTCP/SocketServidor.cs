@@ -612,18 +612,22 @@ namespace ServidorTCP
             //double longitud = double.Parse(ubicacion.Longitud, CultureInfo.InvariantCulture);
             double latitud = ubicacion.Latitud;
             double longitud = ubicacion.Longitud;
+            double hdop = ubicacion.Hdop;
+            double altitud = ubicacion.Altitud;
 
             try
             {
                 using var connection = new NpgsqlConnection(_connectionString);
                 connection.Open();
 
-                using var command = new NpgsqlCommand("CALL cargar_ubicacion(@idRegistro, @idDispositivo, @numero_evento, @latitud, @longitud, @ubiTimestamp, @agenteID)", connection);
+                using var command = new NpgsqlCommand("CALL cargar_ubicacion(@idRegistro, @idDispositivo, @numero_evento, @latitud, @longitud, @hdop, @altitud, @ubiTimestamp, @agenteID)", connection);
                 command.Parameters.AddWithValue("idRegistro", idRegistro);
                 command.Parameters.AddWithValue("idDispositivo", idDispositivo);
                 command.Parameters.AddWithValue("numero_evento", (long)numeroEvento);
                 command.Parameters.AddWithValue("latitud", latitud);
                 command.Parameters.AddWithValue("longitud", longitud);
+                command.Parameters.AddWithValue("hdop", hdop);
+                command.Parameters.AddWithValue("altitud", altitud);
                 command.Parameters.AddWithValue("ubiTimestamp", ubiTimestamp);
                 command.Parameters.AddWithValue("agenteID", agenteID);
                 command.ExecuteNonQuery();
