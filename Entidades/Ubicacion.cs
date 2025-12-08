@@ -3,6 +3,9 @@
     public class Ubicacion
     {
         public string IDAgente { get; set; }
+        public string RegistroID { get; set; }
+        public string DispositivoID { get; set; }
+        public long NumeroEvento { get; set; }
         public double Latitud { get; set; }
         public double Longitud { get; set; }
         public DateTime Timestamp { get; set; }
@@ -11,7 +14,10 @@
 
         public Ubicacion()  
         {
-            IDAgente = "";
+            IDAgente = string.Empty;
+            RegistroID = string.Empty;
+            DispositivoID = string.Empty;
+            NumeroEvento = 0;
             Latitud = 0;
             Longitud = 0;
             Hdop = 0;

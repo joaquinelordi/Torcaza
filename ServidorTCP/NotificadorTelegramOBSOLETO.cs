@@ -16,7 +16,7 @@ using NLog.Fluent;
 
 namespace ServidorTCP
 {
-    public class NotificadorTelegramBot
+    public class TelegramBotardoViejo
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly TelegramBotClient _botClient;
@@ -25,7 +25,7 @@ namespace ServidorTCP
         private int _lastUpdateId = 0; // Para manejar el offset de GetUpdates
         private readonly ConcurrentDictionary<long, string?> _chatsActivos;
 
-        public NotificadorTelegramBot(string token)
+        public TelegramBotardoViejo(string token)
         {
             _botClient = new TelegramBotClient(token);
             _chatsActivos = new ConcurrentDictionary<long, string?>();
@@ -150,14 +150,14 @@ namespace ServidorTCP
         }
     }
 
-    public class NotificadorTelegram
+    public class NotificadorTelegramOBSOLETO
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        private readonly NotificadorTelegramBot _botClient;
+        private readonly TelegramBotardoViejo _botClient;
         private readonly string _chatId;
 
-        public NotificadorTelegram(NotificadorTelegramBot botClient, string chatId)
+        public NotificadorTelegramOBSOLETO(TelegramBotardoViejo botClient, string chatId)
         {
             _botClient = botClient;
             _chatId = chatId;
@@ -179,12 +179,12 @@ namespace ServidorTCP
     /// <summary>
     /// Servicio host que inicia el bot de Telegram y escucha actualizaciones.
     /// </summary>
-    public class TelegramBotHostedService : BackgroundService
+    public class TelegramBotardoViejoHostedService : BackgroundService
     {
-        private readonly NotificadorTelegramBot _bot;
+        private readonly TelegramBotardoViejo _bot;
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public TelegramBotHostedService(NotificadorTelegramBot bot)
+        public TelegramBotardoViejoHostedService(TelegramBotardoViejo bot)
         {
             _bot = bot;
         }

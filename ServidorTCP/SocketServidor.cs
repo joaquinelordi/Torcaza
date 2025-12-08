@@ -19,6 +19,8 @@ using ProjNet.CoordinateSystems;
 using ProjNet.CoordinateSystems.Transformations;
 using Entidades.Interfaces;
 using System.Numerics;
+using System.Data;
+using ModuloAlertas;
 
 
 
@@ -33,9 +35,11 @@ namespace ServidorTCP
         private string _ipAddress { get; set; }
         private readonly OpenCellID _openCellID;
         private readonly HandlerJWT _handlerJWT;
+        private readonly IModuloAlertas _moduloAlertas;
+
 
         public event EventHandler<string> MensajeRecibido;
-        public TcpServer(string ipAddress, int port, OpenCellID openCellID, HandlerJWT handlerJWT)
+        public TcpServer(string ipAddress, int port, OpenCellID openCellID, HandlerJWT handlerJWT, IModuloAlertas moduloAlertas)
         {
             _ipAddress = ipAddress;
             _port = port;
@@ -43,6 +47,7 @@ namespace ServidorTCP
             _listener = new TcpListener(IPAddress.Parse(ipAddress), port);
             _connectionString = "Host=localhost;Database=pruebas_T1;Username=postgres;Password=Admin01";
             _handlerJWT = handlerJWT;
+            _moduloAlertas = moduloAlertas;
         }
 
         public async Task StartAsync()
@@ -129,11 +134,12 @@ namespace ServidorTCP
 
         // ...
 
-        private void ProcesarMensaje(string buffer)
+        private long ProcesarMensaje(string buffer)
         {
             Console.WriteLine($"ProcesarMensaje -> Inicio: {buffer}");
             string mensaje = "";
             string payload = "";
+            // INFOCELL
             //buffer = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoiTU5NTiIsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiI2MUVCRDAyIiwiU0xWTCI6LTYzLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwNDA2MjUxOTQzMjkiLCJCU1RBIjowLCJCTFZMIjo4MCwiU0lNVSI6MCwiQVgiOjAuMDEsIkFZIjowLjAyLCJBWiI6MCwiWUFXIjotMTEzLjI5LCJST0xMIjotMi4wNSwiUFRDSCI6LTUuOTMsIk5laWdoYm9ycyI6W3siVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiJBNzY4IiwiU0xWTCI6LTY3fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMSIsIlNMVkwiOi02OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REUiLCJTTFZMIjotNzB9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNzNEIiwiU0xWTCI6LTc1fSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMiIsIlNMVkwiOi03NX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REYiLCJTTFZMIjotNzd9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxNjZCIiwiU0xWTCI6LTc5fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0EyM0QwMSIsIlNMVkwiOi05Mn0seyJURUNIIjo0LCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiM0IwMiIsIkNJRCI6IjdBMTJFMEUiLCJTTFZMIjotOTR9LHsiVEVDSCI6NCwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjNCMDIiLCJDSUQiOiI3QTIzRDAxIiwiU0xWTCI6LTk1fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0ExMkUwNiIsIlNMVkwiOi05OX0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozMTAsIkxBQyI6IjFCRDciLCJDSUQiOiI2OEE3IiwiU0xWTCI6LTc3fSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMSIsIkNJRCI6IjRDMjA1IiwiU0xWTCI6LTgyfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjMxMCwiTEFDIjoiREYxMiIsIkNJRCI6IjQ4NjAyIiwiU0xWTCI6LTg3fV19.KTE0NZbVORx0IsuUvVR3jCh7tdV3cHahOQ4Qlle3G3o"; 
 
             // El mensaje puede ser un JWT, debo extraer el payload de ser necesario
@@ -160,14 +166,22 @@ namespace ServidorTCP
 
             //Aca la idea es usar un enum con los tipos de acciones disponibles, enviado en el objeto del mensaje 
             long numeroEvento = CargarEvento(payloadBase);
+
+            return numeroEvento;
         }
 
         public void ProcesarMensajeExterno(string buffer)
         {
+            long numeroEvento;
             // la idea es que se estraiga del body de un HTTP POST y se pase al metodo el jwt o el json que se envie desde un cliente externo
-            Console.WriteLine($"ProcesarMensajeExterno -> Inicio: {buffer}");
-            ProcesarMensaje(buffer);
+            _logger.Debug($"ProcesarMensajeExterno -> Inicio: {buffer}");
+            numeroEvento = ProcesarMensaje(buffer);
 
+            if(numeroEvento != 0)
+            {
+                _logger.Debug($"ProcesarMensajeExterno -> Evento cargado con numero: {numeroEvento}");
+                _moduloAlertas.ProcesarEvento(numeroEvento);
+            }
         }
 
         /// <summary>
@@ -606,6 +620,7 @@ namespace ServidorTCP
             var ubiTimestamp = DateTime.Now; //ubicacion.Timestamp;
             var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             ubicacion.IDAgente = agenteID.ToString();
+            List<int> lCercosID = new List<int>();
 
             // Convertimos latitud y longitud a double
             //double latitud = double.Parse(ubicacion.Latitud, CultureInfo.InvariantCulture);
@@ -633,18 +648,6 @@ namespace ServidorTCP
                 command.ExecuteNonQuery();
 
                 _logger.Debug($"CargarUbicacion -> Carga exitosa");
-
-                //Si lo pude cargar chequeo el tema de alertas
-                if(ActualizarEstadoSeguimiento(ubicacion))
-                {
-                    _logger.Debug($"CargarUbicacion -> Estado de seguimiento actualizado correctamente.");
-                    
-                }
-                else
-                {
-                    _logger.Warn($"CargarUbicacion -> No se pudo actualizar el estado de seguimiento.");
-                }
-
 
             }
             catch (NpgsqlException ex)
@@ -780,63 +783,13 @@ namespace ServidorTCP
         #endregion
 
         #region Alarmas
-        public bool ActualizarEstadoSeguimiento(Ubicacion ubicacion)
-        {
-            bool bRet = false;
-            double latitud = ubicacion.Latitud;
-            double longitud = ubicacion.Longitud;
-
-            try
-            {
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    conn.Open();
-
-                    string sql = @"
-                            SELECT cerco_id
-                            FROM cercos_virtuales
-                            WHERE ST_Contains(
-                                cerco_geom_22185,
-                                ST_Transform(
-                                    ST_SetSRID(ST_MakePoint(@longitud, @latitud), 4326),
-                                    22185
-                                )
-                            )
-                            LIMIT 1;
-                        ";
-
-                    object result;
-                    using (var cmd = new NpgsqlCommand(sql, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@latitud", latitud);
-                        cmd.Parameters.AddWithValue("@longitud", longitud);
-
-                        result = cmd.ExecuteScalar();
-                        result = result != null ? (int?)Convert.ToInt32(result) : null;
-                    }
-
-                    if (result != null)
-                    {
-                        bRet = true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error al consultar la base de datos: " + ex.Message);
-                bRet = false;
-            }
-
-            return bRet;
-        }
-
         public bool TestUbicacionDentroFueraDeCerco()
         {
             // Coordenadas del cerco cargado
             // Rectángulo entre:
             //   SurOeste: (-34.6372222393039, -58.36701393127442)
             //   NorEste:  (-34.632278784157506, -58.36152076721192)
-
+            AlertaCercoVirtual moduloAlertaCerco = new AlertaCercoVirtual();
             bool bRet = true;
             // Punto dentro del cerco
             double latDentro = -34.6345;
@@ -857,14 +810,15 @@ namespace ServidorTCP
 
             try
             {
-                bool estaDentro = ActualizarEstadoSeguimiento(ubicacionDentro);
+                List<(int, int, DateTime)> lCerco = new List<(int, int, DateTime)>();
+                bool estaDentro = moduloAlertaCerco.ActualizarEstadoSeguimiento(ubicacionDentro,ref lCerco);
                 if (!estaDentro)
                 {
                     bRet = false;
                     throw new Exception("Fallo: El punto dentro del cerco fue considerado fuera.");
                 }
 
-                bool estaFuera = ActualizarEstadoSeguimiento(ubicacionFuera);
+                bool estaFuera = moduloAlertaCerco.ActualizarEstadoSeguimiento(ubicacionFuera,ref  lCerco);
                 if (estaFuera)
                 {
                     bRet = false;

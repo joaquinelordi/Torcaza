@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ServidorTCP;
+using ModuloAlertas;
 
 namespace ServidorTCP
 {
@@ -38,7 +39,7 @@ namespace ServidorTCP
                                var handlerJWT = sp.GetRequiredService<HandlerJWT>();
                                var ipAddress = sp.GetRequiredService<IConfiguration>()["appSettings:TCP_IP_ADDRESS"] ?? "127.0.0.1";
                                var port = int.Parse(sp.GetRequiredService<IConfiguration>()["appSettings:TCP_PORT"] ?? "123");
-                               return new TcpServer(ipAddress, port, openCellID, handlerJWT);
+                               return new TcpServer(ipAddress, port, openCellID, handlerJWT, new AlertaCercoVirtual());
                            });
                        })
                        .Build();

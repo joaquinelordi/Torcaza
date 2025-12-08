@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Entidades;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
+using Microsoft.Extensions.Options;
+using ModuloAlertas;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,33 +95,48 @@ builder.Services.AddSingleton<CapaComunicacionAppCliente>(sp =>
     return new CapaComunicacionAppCliente(httpClient, urlBrowser);
 });
 
+// Notificador Telegram Bot clientes
+builder.Services.AddSingleton<TelegramBot>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var token = configuration["TorcazaBot:ApiKey"];
+    var conectionString = configuration["Database:ConnectionString"];
+    return new TelegramBot(token, conectionString);
+});
+
+
 // Servicio Servidor TCP
 builder.Services.AddSingleton<TcpServer>(sp =>
 {
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var conectionString = configuration["Database:ConnectionString"];
     var openCellID = sp.GetRequiredService<OpenCellID>();
     var handlerJWT = sp.GetRequiredService<HandlerJWT>();
-    return new TcpServer(ipAddress, port, openCellID, handlerJWT);
+    var telegramBot = sp.GetRequiredService<TelegramBot>();
+    var notificadorTelegram = new NotificadorTelegram(telegramBot);
+    var notificadorWEB = new NotificadorWEB();
+    var listaNotificadores = new List<INotificador>
+    {
+        notificadorTelegram,
+        notificadorWEB
+    };
+    var notificador = new Notificador(listaNotificadores);
+
+    return new TcpServer(ipAddress, port, openCellID, handlerJWT, new AlertaCercoVirtual(conectionString, notificador));
 });
 
 // SignalR
 builder.Services.AddSignalR();
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy("SignalRDev", policy =>
     {
-        policy.WithOrigins("https://localhost:7089")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        policy
+            .WithOrigins("http://localhost:5183", "https://localhost:5183")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials(); // necesario si luego usás cookies o accessTokenFactory
     });
-});
-
-// Notificador Telegram Bot clientes
-builder.Services.AddSingleton<NotificadorTelegramBot>(sp =>
-{
-    var configuration = sp.GetRequiredService<IConfiguration>();
-    var token = configuration["TorcazaBot:ApiKey"];
-    return new NotificadorTelegramBot(token);
 });
 
 // servicio que arranca el bot de telegram
@@ -153,15 +171,25 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 
-
+/*
+app.UseCors("SignalR");
 app.UseAuthorization();
 // Mapea el endpoint de SignalR
-app.UseCors();
 app.MapHub<Torcaza.Hubs.AlertasHub>("/hub/Alertas").RequireAuthorization("EncryptedOnly");
-
 
 // Esto siempre va ultimo
 app.MapControllers().RequireAuthorization("EncryptedOnly");
+*/
+
+//PARA PRUEBAS, LUEGO SE DEBE CONFIGURAR CORS CORRECTAMENTE
+app.UseRouting();
+app.UseCors("SignalRDev");
+// Hub SIN autorización (solo pruebas)
+app.MapHub<Torcaza.Hubs.AlertasHub>("/hub/Alertas").RequireCors("SignalRDev");
+
+// Controllers (si querés también dejarlos sin auth mientras probás)
+app.MapControllers(); // .RequireAuthorization("EncryptedOnly");  <- COMENTALO EN PRUEBA
+
 //Inicio servidor TCP
 var tcpService = app.Services.GetRequiredService<TcpServer>();
 
