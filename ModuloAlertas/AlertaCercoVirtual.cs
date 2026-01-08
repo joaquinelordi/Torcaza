@@ -22,13 +22,6 @@ namespace ModuloAlertas
             _connectionString = connectionString;
             _notificador = notificador;
         }
-
-        private enum eTipoAlertaCercoVirtual
-        {
-            EntradaCerco = 0,
-            SalidaCerco = 1
-        }
-
         private enum eEstadoAlertaCercoVirtual
         {
             Inactiva = 0,

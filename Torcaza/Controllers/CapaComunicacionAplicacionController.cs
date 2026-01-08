@@ -143,5 +143,58 @@ namespace Torcaza.Controllers
                 });
             }
         }
+
+        [HttpGet("cercosvirtuales")]
+        public async Task<IActionResult> ConsultarCercosVirtuales([FromQuery] Guid registroID)
+        {
+            try
+            {
+                //valido el Guid de la peticion
+                if (registroID == Guid.Empty)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "El registroID proporcionado no es válido."
+                    });
+                }
+
+                if ( await _tcpServer.ObtenerCercosVirtuales(registroID.ToString(), out List<string> jCercos))
+                {
+                    // devolvemos un array de objetos (cada string en jsonXfila ya es un JSON con geometry y metadata).
+                    var cercosArray = jCercos
+                        .Select(s => JsonConvert.DeserializeObject(s))
+                        .ToList();
+
+                    var jsonResponse = new Dictionary<string, object>
+                    {
+                        { "success", true },
+                        { "message", "Cercos virtuales obtenidos correctamente." },
+                        { "cercosVirtuales", cercosArray }
+                    };
+                    //string payload = _handlerJWT.CrearToken(jsonResponse);
+                    //_logger.Debug("Mensaje JWT: {0}", payload);
+                    string payload = JsonConvert.SerializeObject(jsonResponse);
+                    return Content(payload, "application/json");
+                }
+                else
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = $"No se encontraron cercos virtuales para el registroID: {registroID}."
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error al consultar cercos virtuales.",
+                    error = e.Message
+                });
+            }
+        }
     }
 }

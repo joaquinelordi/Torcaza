@@ -1,13 +1,14 @@
-using ServidorTCP;
-using Microsoft.Extensions.Configuration;
-using System.Configuration;
-using System.Net;
+using Entidades;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Entidades;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using ModuloAlertas;
+using ServidorTCP;
+using System.Configuration;
+using System.Net;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -102,6 +103,15 @@ builder.Services.AddSingleton<TelegramBot>(sp =>
     var token = configuration["TorcazaBot:ApiKey"];
     var conectionString = configuration["Database:ConnectionString"];
     return new TelegramBot(token, conectionString);
+});
+
+// Entity Framework
+builder.Services.AddDbContext<AlertasDBContext>(options =>
+{
+    var configuration = builder.Configuration;
+    var conectionString = configuration["Database:ConnectionString"];
+    options.UseNpgsql(conectionString, npgsql => npgsql.UseNetTopologySuite());
+
 });
 
 

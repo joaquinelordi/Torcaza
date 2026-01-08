@@ -45,7 +45,7 @@ namespace ServidorTCP
             _port = port;
             _openCellID = openCellID;
             _listener = new TcpListener(IPAddress.Parse(ipAddress), port);
-            _connectionString = "Host=localhost;Database=pruebas_T1;Username=postgres;Password=Admin01";
+            _connectionString = "Host=localhost;Database=pruebas_T1;Username=postgres;Password=Admin01;Include Error Detail=true;";
             _handlerJWT = handlerJWT;
             _moduloAlertas = moduloAlertas;
         }
@@ -145,7 +145,7 @@ namespace ServidorTCP
             // El mensaje puede ser un JWT, debo extraer el payload de ser necesario
             if (_handlerJWT.StringEsJWTValido(buffer))
             {
-                var estadoJWT = _handlerJWT.ProcesarPayloadCompleto(buffer,ref payload);
+                var estadoJWT = _handlerJWT.ProcesarPayloadCompleto(buffer, ref payload);
                 if (estadoJWT == eEstadoJWT.OK)
                 {
                     mensaje = payload;
@@ -177,7 +177,7 @@ namespace ServidorTCP
             _logger.Debug($"ProcesarMensajeExterno -> Inicio: {buffer}");
             numeroEvento = ProcesarMensaje(buffer);
 
-            if(numeroEvento != 0)
+            if (numeroEvento != 0)
             {
                 _logger.Debug($"ProcesarMensajeExterno -> Evento cargado con numero: {numeroEvento}");
                 _moduloAlertas.ProcesarEvento(numeroEvento);
@@ -376,7 +376,7 @@ namespace ServidorTCP
         {
             _logger.Debug($"CalcularRadioTorreCelular -> Inicio");
             List<RangoEstimado> rangoEstimados = new List<RangoEstimado>();
-            
+
             foreach (var infoCell in infoTorreCelulares)
             {
                 if (infoCell.IsInDatabase)
@@ -415,9 +415,9 @@ namespace ServidorTCP
         {
             HandlerCanalInalambrico handlerCanalInalambrico = new HandlerCanalInalambrico();
             handlerCanalInalambrico.Inicializar();
-            
+
             List<InfoCell> torresCelularesEnDatabase = infoTorreCelulares.ToList().FindAll(t => t.IsInDatabase);
-            Dictionary<long,CellInfo> cell = new Dictionary<long, CellInfo>();
+            Dictionary<long, CellInfo> cell = new Dictionary<long, CellInfo>();
 
             try
             {
@@ -437,7 +437,7 @@ namespace ServidorTCP
                     cell.Add(cellInfo.CellId, cellInfo);
                 }
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 _logger.Error($"CalcularPosicion -> Error armando el diccionario de torres celulares: {ex.Message}");
 
@@ -704,30 +704,45 @@ namespace ServidorTCP
             _logger.Debug($"CargarEventoCercoVirtual -> Inicio, cantidad de cercos: {cercos.Count}");
 
             try
-            { 
+            {
                 var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
                 var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
                 dataSourceBuilder.UseNetTopologySuite();
                 var dataSource = dataSourceBuilder.Build();
 
                 using var connection = dataSource.OpenConnection();
-                connection.Open();
 
                 foreach (var cerco in cercos)
                 {
                     int cercoId = 0;
-                    Geometry geom = null;
+                    Geometry geom4326 = null;
                     string nombre = $"Cerco_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
 
                     switch (cerco)
                     {
                         case CercoCirculo circulo:
-                            // SRID 4326 (WGS84), las unidades son grados decimales (latitud/longitud).
-                            double radioGrados = circulo.Radio / 111320.0;
-                            var centro = geometryFactory.CreatePoint(new Coordinate(circulo.Lng, circulo.Lat));
-                            var geomGPS = centro.Buffer(radioGrados); // radio en grados
-                            break;
+                            {
+                                using var cmdInsert = new NpgsqlCommand(@"
+                                    INSERT INTO public.cercos_virtuales (cerco_nombre, cerco_geom_4326)
+                                    VALUES (
+                                      @nombre,
+                                      ST_Buffer(
+                                        ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography,
+                                        @radio_m
+                                      )::geometry(Polygon, 4326)
+                                    )
+                                    RETURNING cerco_id;
+                                    ", connection);
 
+                                cmdInsert.Parameters.AddWithValue("nombre", nombre);
+                                cmdInsert.Parameters.Add("lng", NpgsqlDbType.Double).Value = circulo.Lng;
+                                cmdInsert.Parameters.Add("lat", NpgsqlDbType.Double).Value = circulo.Lat;
+                                cmdInsert.Parameters.Add("radio_m", NpgsqlDbType.Double).Value = circulo.Radio;
+
+                                cercoId = Convert.ToInt32(cmdInsert.ExecuteScalar());
+                                _logger.Debug($"Círculo insertado -> id={cercoId}");
+                                break;
+                            }
                         case CercoRectangulo rect:
                             var coordsGPS = new[]
                             {
@@ -737,30 +752,35 @@ namespace ServidorTCP
                                 new Coordinate(rect.SurOesteLng, rect.NorEsteLat),
                                 new Coordinate(rect.SurOesteLng, rect.SurOesteLat)
                             };
-                            geom = geometryFactory.CreatePolygon(coordsGPS);
+                            geom4326 = geometryFactory.CreatePolygon(coordsGPS);
+                            geom4326.SRID = 4326;
+
+                            var cmdCercoRect = new NpgsqlCommand(@"
+                                INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom_4326)
+                                VALUES (@nombre, @geom_4326)
+                                RETURNING cerco_id;", connection);
+
+                            cmdCercoRect.Parameters.AddWithValue("nombre", nombre);
+                            cmdCercoRect.Parameters.AddWithValue("geom_4326", geom4326);
+                            //var c = cmdCercoRect.Parameters.AddWithValue("geom_4326", NpgsqlDbType.Geometry);
+                            //c.Value = geom4326;
+                            cercoId = Convert.ToInt32(cmdCercoRect.ExecuteScalar());
                             break;
                     }
 
-                    if (geom != null)
+                    if (cercoId > 0)
                     {
                         try
                         {
                             var dispositivoID = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
 
-                            // graba en cerco_virtuales
-                            using var cmdCerco = new NpgsqlCommand(
-                                "INSERT INTO cercos_virtuales (cerco_nombre, cerco_geom_4326) VALUES (@nombre, @geom) RETURNING cerco_id", connection);
-                            cmdCerco.Parameters.AddWithValue("nombre", nombre);
-                            cmdCerco.Parameters.AddWithValue("geom", geom);
-                            //Devuelve la primera columna de la insercion (cerco_id)
-                            cercoId = Convert.ToInt32(cmdCerco.ExecuteScalar());
-
                             //grabar tabla dispositivo_cerco
                             using var cmdDispCerco = new NpgsqlCommand(
-                                "INSERT INTO dispositivo_cerco (dc_disptoken_id, dc_cerco_id, dc_tipo_alerta) VALUES (@disptoken_id, @cerco_id, @tipo_alerta)", connection);
+                                "INSERT INTO dispositivo_cerco (dc_disp_id, dc_cerco_id, dc_tipo_alerta) VALUES (@disptoken_id, @cerco_id, @tipo_alerta)", connection);
                             cmdDispCerco.Parameters.AddWithValue("disptoken_id", dispositivoID);
                             cmdDispCerco.Parameters.AddWithValue("cerco_id", cercoId);
-                            cmdDispCerco.Parameters.AddWithValue("tipo_alerta", 0); 
+                            cmdDispCerco.Parameters.AddWithValue("tipo_alerta", 0);
+                            cmdDispCerco.ExecuteScalar();
                         }
                         catch (Exception ex)
                         {
@@ -779,7 +799,79 @@ namespace ServidorTCP
                 _logger.Error($"Error al cargar cercos virtuales: {e.Message}");
             }
         }
-            
+
+
+        public Task<bool> ObtenerCercosVirtuales(string registroID, out List<string> jsonXfila )//List<CercoVirtualBase> cercos)
+        {
+            //cercos = new List<CercoVirtualBase>();
+            jsonXfila = new List<string>();
+            bool bRet = false;
+            try
+            {
+                var registroGuid = Guid.Parse(registroID);
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+
+                string sQuery = @"
+                    SELECT  cv.cerco_id as cerco_id, cv.cerco_nombre as cerco_nombre,
+                            ST_AsGeoJSON(cv.cerco_geom_4326) AS geom_geojson, cv.cerco_activo as activo 
+                    FROM cercos_virtuales cv
+                    JOIN dispositivo_cerco dc ON cv.cerco_id = dc.dc_cerco_id
+                    JOIN dispositivos_por_usuario dxu ON dc.dc_disp_id = dxu.dxu_dispositivoid
+                    WHERE dxu.dxu_registroid = @registroID;
+                    ";
+
+                using var command = new NpgsqlCommand(sQuery, connection);
+                command.Parameters.AddWithValue("registroID", registroGuid);
+
+                using (var reader = command.ExecuteReader())
+                {
+                    int idxCercoId = reader.GetOrdinal("cerco_id");
+                    int idxCercoNombre = reader.GetOrdinal("cerco_nombre");
+                    int idxGeomGeoJson = reader.GetOrdinal("geom_geojson");
+                    int idxActivo = reader.GetOrdinal("activo");
+
+                    int cercoID;
+                    string cercoNombre;
+                    string geomGeoJson;
+                    bool bCercoActivo;
+
+                    while (reader.Read())
+                    {
+                        // Verificar si el valor no es nulo antes de leerlo, si lo es no agrego fila porque es un error de inconsistencia en BDD
+                        if (!reader.IsDBNull(idxCercoId))
+                        {
+                            cercoID = reader.GetInt32(idxCercoId);
+                            cercoNombre = reader.GetString(idxCercoNombre);
+                            geomGeoJson = reader.GetString(idxGeomGeoJson);
+                            bCercoActivo = reader.GetBoolean(idxActivo);
+
+                            // estos datos deben enviarse al fronten en formato JSON por fila
+                            // Armar objeto por fila. Enviar geometry como objeto GeoJSON (no string) para fácil consumo del frontend.
+                            // Deserializamos el GeoJSON a JObject para incrustarlo directamente.
+                            var fila = new Dictionary<string, object>
+                            {
+                                { "cerco_id", cercoID },
+                                { "cerco_nombre", cercoNombre },
+                                { "activo", bCercoActivo },
+                                { "geom_geojson", JsonConvert.DeserializeObject(geomGeoJson) }
+                            };
+
+                            jsonXfila.Add(JsonConvert.SerializeObject(fila));
+                        }
+                    }
+                    bRet = true;
+                }
+
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error al obtener los cercos virtuales: {ex.Message}");
+                bRet = false;
+            }
+
+            return Task.FromResult(bRet);
+        }
         #endregion
 
         #region Alarmas

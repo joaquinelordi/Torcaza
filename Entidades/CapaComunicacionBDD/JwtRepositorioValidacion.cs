@@ -39,7 +39,6 @@ namespace Entidades.CapaComunicacionBDD
             }
             catch (Exception ex)
             {
-                // Manejo de la excepción (puedes registrar el error o lanzar una excepción personalizada)
                 _logger.Error($"Error al verificar la existencia de iss: {ex.Message}");
                 bRet = false;
             }
