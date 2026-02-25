@@ -37,6 +37,8 @@ namespace Entidades
 
         public bool IsInDatabase { get; set; }
 
+        public ParametrosModelo ParametrosModelo { get; set; }
+
         public InfoCell()
         {
             Mcc = 0;
@@ -50,6 +52,9 @@ namespace Entidades
             FechaHora = DateTime.Now;
             NumeroRegistro = string.Empty;
             IsInDatabase = false;
+            Radio = string.Empty;
+
+            ParametrosModelo = new ParametrosModelo();
         }
 
         //Contructor a partir de un CellInfo recibido  

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using static Entidades.Utiles;
 
 namespace Entidades.Interfaces
 {
@@ -12,10 +13,26 @@ namespace Entidades.Interfaces
     /// </summary>
     public interface ICalcularPosicion
     {
-        DatosSalida Calcular(IList<RangoEstimado> rangoEstimados, IDictionary<long, CellInfo> torres, Vector2? x0 = null);
+        DatosSalida Calcular(IDictionary<long, CellInfo> torres);
+
+        DatosSalida Calcular(IList<RangoEstimado> rangoEstimados, IDictionary<long, CellInfo> torres);
     }
 
-    public record DatosSalida(
-        Vector2 posicionSalida
-        );
+    public class DatosSalida
+    {
+        public Vector2d posicionSalida { get; set; }
+        public double sigma;
+
+        public DatosSalida()
+        {
+            posicionSalida = new Vector2d();
+            sigma = 1;
+        }
+
+        public DatosSalida(Vector2d v, double s = 1)
+        {
+            posicionSalida = v;
+            sigma = s;
+        }
+    }
 }

@@ -12,6 +12,8 @@
         public double Hdop { get; set; }
         public double Altitud { get; set; }
 
+        public double SigmaPosicion { get; set; }
+
         public Ubicacion()  
         {
             IDAgente = string.Empty;
@@ -23,6 +25,7 @@
             Hdop = 0;
             Altitud = 0;
             Timestamp = DateTime.MinValue;   
+            SigmaPosicion = 0;
         }
 
         public Ubicacion(GnssInfoPayload payload)

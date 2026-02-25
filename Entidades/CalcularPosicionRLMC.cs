@@ -14,18 +14,23 @@ using NetTopologySuite.IO;
 using NetTopologySuite;
 using Npgsql;
 using Entidades.CapaComunicacionBDD;
+using static Entidades.Utiles;
 
 using static Entidades.CalcularPosicionRLMC;
 
 namespace Entidades
 {
+
+    /// <summary>
+    /// EN DESUSO
+    /// </summary>
     public class CalcularPosicionRLMC : ICalcularPosicion
     {
         private readonly string _connectionSQLString = "Host=localhost;Database=pruebas_T1;Username=postgres;Password=Admin01";
 
-        public DatosSalida Calcular(IList<RangoEstimado> rangoEstimados, IDictionary<long, CellInfo> torres, Vector2? x0 = null)
+        public DatosSalida Calcular(IList<RangoEstimado> rangoEstimados, IDictionary<long, CellInfo> torres)
         {
-            DatosSalida resultado = new DatosSalida(new Vector2(float.NaN, float.NaN));
+            DatosSalida resultado = new DatosSalida();
             try
             {
                 List<TuplaCalculo> tuplas = new List<TuplaCalculo>();
@@ -39,14 +44,14 @@ namespace Entidades
                     }
                 }
 
-                Vector2 posicion = CalcularPosicionDesdeGPS(tuplas, x0);
+                Vector2d posicion = CalcularPosicionDesdeGPS(tuplas);
                 resultado = new DatosSalida(posicion);
             }
             catch (Exception ex)
             {
                 // Manejo de la excepción (puedes registrar el error o lanzar una excepción personalizada)
                 Console.WriteLine($"Error al calcular la posición: {ex.Message}");
-                resultado = new DatosSalida(new Vector2(float.NaN, float.NaN));
+                resultado = new DatosSalida(new Vector2d(double.NaN, double.NaN));
             }
 
             return resultado;
@@ -61,7 +66,7 @@ namespace Entidades
         /// <param name="x0"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        private System.Numerics.Vector2 calcularPosicionRLMC(IList<TuplaCalculo> t, System.Numerics.Vector2? x0 = null)
+        private Vector2d calcularPosicionRLMC(IList<TuplaCalculo> t, Vector2d? x0 = null)
         {
             if (t == null || t.Count < 3)
                 throw new ArgumentException("Se requieren al menos 3 rangos estimados para calcular la posición.");
@@ -102,7 +107,7 @@ namespace Entidades
 
             double det = A11 * A22 - A12 * A12;
             if (Math.Abs(det) < 1e-9)
-                return new System.Numerics.Vector2((float)x1, (float)y1); // fallback: ancla 1
+                return new Vector2d(x1, y1); // fallback: ancla 1
 
             double inv11 = A22 / det;
             double inv12 = -A12 / det;
@@ -116,11 +121,12 @@ namespace Entidades
             double X = x1 + ux;
             double Y = y1 + uy;
 
-            return new System.Numerics.Vector2((float)X, (float)Y);
+            return new Vector2d(X, Y);
         }
 
+        // EN DESUSO
         /// Wrapper: recibe tuplas en GPS (lon°,lat°), resuelve en 22185 y devuelve (lon°,lat°).
-        public Vector2 CalcularPosicionDesdeGPS(IList<TuplaCalculo> tuplasGps, Vector2? x0 = null)
+        public Vector2d CalcularPosicionDesdeGPS(IList<TuplaCalculo> tuplasGps)
         {
             try
             {
@@ -129,11 +135,11 @@ namespace Entidades
                 conexion.Open();
 
                 // Corregir el uso de TransformarTuplasGpsA22185Async para manejar la tarea correctamente  
-                var tuplaTransformadaTask = PostgisTransforms.TransformarTuplasGpsA22185Async(conexion, (IReadOnlyList<TuplaCalculo>)tuplasGps);
+                var tuplaTransformadaTask = PostgisTransforms.TransformarTuplasGpsA22185Async(conexion, (IReadOnlyList<Vector2d>)tuplasGps);
                 tuplaTransformadaTask.Wait();
-                List<TuplaCalculo> tuplaTransformada = tuplaTransformadaTask.Result;
+                List<Vector2d> tuplaTransformada = tuplaTransformadaTask.Result;
 
-                var xy22185 = calcularPosicionRLMC(tuplaTransformada, x0);
+                var xy22185 = calcularPosicionRLMC(tuplasGps);
 
                 // Transformar de vuelta a GPS si es necesario  
                 var posicionGpsTask = PostgisTransforms.Transformar22185AWgsAsync(conexion, xy22185);
@@ -143,8 +149,13 @@ namespace Entidades
             catch (Exception ex)
             {
                 Console.WriteLine($"Error al calcular la posición desde GPS: {ex.Message}");
-                return new Vector2(float.NaN, float.NaN);
+                return new Vector2d(double.NaN, double.NaN);
             }
+        }
+
+        public DatosSalida Calcular(IDictionary<long, CellInfo> torres)
+        {
+            throw new NotImplementedException();
         }
     }
 }

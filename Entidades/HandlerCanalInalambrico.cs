@@ -46,6 +46,7 @@ namespace Entidades
         private ICalcularPosicion _estrategiaCalcularPosicion; 
         private CellInfo _cellInfo;
         private CellParametrosCaracterizacion _parametros;
+        public ParametrosModelo ParametrosModelo { get; set; }
 
 
         // modelo okumura-hata para entornos urbanos
@@ -84,10 +85,12 @@ namespace Entidades
             }
         }
 
-        public void Inicializar()
+        public void Inicializar(ref IList<InfoCell> infoTorreCelulares)
         {
+            // Inicializa el modelo de rango de distancia y la estrategia de cálculo de posición
             _modeloRangoDeDistancia = new ModeloOkumuraHata();
-            _estrategiaCalcularPosicion = new CalcularPosicionRLMC();
+            //_estrategiaCalcularPosicion = new CalcularPosicionRLMC();
+            _estrategiaCalcularPosicion = new CalcularPosicionRLMCPorRSSI();
 
             _cellInfo = new CellInfo(
                 Convert.ToInt64(this.CelId, 16),
@@ -98,7 +101,10 @@ namespace Entidades
                 this.Canal,
                 this.alturaAntenaTx,
                 this.tipoArea,
-                this.SenialdB);
+                this.SenialdB,
+                this.ParametrosModelo.B,
+                this.ParametrosModelo.Betha0
+                );
 
             _parametros = new CellParametrosCaracterizacion(
                 SeleccionarFrecuenciaMHz(this.TecnologiaAcceso, this.Banda, this.Canal),
@@ -107,7 +113,11 @@ namespace Entidades
                 this.tipoArea,
                 this.TecnologiaAcceso,
                 this.Banda,
-                this.Canal);
+                this.Canal,
+                this.ParametrosModelo.B,
+                this.ParametrosModelo.Betha0,
+                0
+                );
 
         }
 
@@ -157,61 +167,9 @@ namespace Entidades
             return _modeloRangoDeDistancia.Estimar(_cellInfo, _parametros);
         }
 
-        public DatosSalida CalcularPosicion(IList<RangoEstimado> rangoEstimados, IDictionary<long, CellInfo> torres, System.Numerics.Vector2? x0 = null)
+        public DatosSalida CalcularPosicion(IDictionary<long, CellInfo> torres, System.Numerics.Vector2? x0 = null)
         {
-            return _estrategiaCalcularPosicion.Calcular(rangoEstimados, torres);
-        }
-
-        private void CalcularDistanciaModelo0()
-        {
-            double exponente = (potenciaTransmision - nivelSenialReceptor) / (10 * cte_n);
-            distancia = Math.Pow(10, exponente);
-        }
-        /// <summary>
-        /// Calcula la distancia a la torre celular utilizando el modelo de Okumura-Hata.
-        /// </summary>
-        private void CalcularPathLossModelo1()
-        {
-            double dist_km = distancia / 1000;
-            // Segunda iteración que calcula la distancia a la torre celular
-            pathLoss = 69.55 + (26.16 * Math.Log10(frec))
-                            - (13.82 * Math.Log10(alturaAntenaTx))
-                            - C_rc(frec, tipoArea)
-                            + (44.9 - 6.55 * Math.Log10(alturaAntenaTx)) * Math.Log10(dist_km);
-        }
-
-        private void AjusteParametrosModelo1()
-        {
-            // Ajuste de parámetros para el modelo de Okumura-Hata
-            // Se compara el pathloss con el valor de potencia de transmisión y nivel de señal del receptor
-            // si se cumple esto es que la potencia de Transmision estimada fue mayor a la real
-            // por lo tanto se ajusta la potencia de transmisión
-            if (pathLoss > potenciaTransmision - nivelSenialReceptor)
-            {
-                potenciaTransmision = pathLoss + nivelSenialReceptor;
-            }
-            else
-            {
-                // si no se cumple, ajusto la distancia a la torre celular
-                cte_n -= 0.2; // disminuyo el exponente de pérdida de trayectoria
-
-            }
-
-        }
-
-        private void CalcularDistanciaModelo1()
-        {
-            // Tercera iteración que calcula la distancia a la torre celular a partir del modelo de okumura-hata
-            double dist_km;
-            double A = 44.9 - 6.55 * Math.Log10(alturaAntenaTx);
-            double B = 69.55
-                + 26.16 * Math.Log10(frec)
-                - 13.82 * Math.Log10(alturaAntenaTx)
-                - C_rc(frec, tipoArea);
-
-            double logDistancia = (pathLoss - B) / A;
-            dist_km = Math.Pow(10, logDistancia);
-            distancia = dist_km * 1000; // Convertir a metros
+            return _estrategiaCalcularPosicion.Calcular(torres);
         }
 
         public double C_rc(int frecuencia, eTipoArea tipoArea)
@@ -246,6 +204,7 @@ namespace Entidades
             return c_rc;
         }
     }
+
     /// <summary>
     /// Información de calculo para una celda celular.
     /// </summary>
@@ -265,8 +224,10 @@ namespace Entidades
         int? Channel,
         double? AlturaTx,              // altura torre celular en metros
         eTipoArea AreaTipo,
-        double RSSI_Rx                // nivel de senial recibida por dispositivo de la torre en dBm
-        ); 
+        double RSSI_Rx,                // nivel de senial recibida por dispositivo de la torre en dBm
+        double B,                     // pendiente del modelo simplificado de path loss
+        double Betha0                 // parametro que engloba los demas terminos del modelo simplificado de path loss
+    ); 
 
 
     /// <summary>
@@ -279,7 +240,7 @@ namespace Entidades
         long CellId,
         double DistanciaM,          // d̂ en metros
         double Varianza             // Var[d̂] varianza de la distancia en metros2
-        );
+    );
 
     /// <summary>
     /// Parámetros de caracterización del canal inalámbrico, Datos a utilizar en el modelo
@@ -298,8 +259,11 @@ namespace Entidades
         eTipoArea TipoArea,
         int Tecnologia,
         string? Band,
-        int? Channel
-        );
+        int? Channel,
+        double Betha0,
+        double B,
+        double RSSI_Rx
+    );
 
 
 }

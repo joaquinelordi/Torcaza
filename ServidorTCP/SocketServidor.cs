@@ -272,7 +272,7 @@ namespace ServidorTCP
                         Ubicacion ubicacionEstimada = new Ubicacion();
                         CargarDatosTorresCelulares(ref infoTorreCelulares, payloadBase);
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
-                        // TODO: por ahora solo calculo un radio unico para cada torre celular
+                        // TODO: devuelve una ubicacion con latitud y longitud estimada y singma en base a las torres celulares encontradas
                         EstimarUbicacion(ref infoTorreCelulares, ref ubicacionEstimada);
                         CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
                         CargarUbicacion(ubicacionEstimada, numeroEvento);
@@ -289,12 +289,106 @@ namespace ServidorTCP
         private void EstimarUbicacion(ref List<InfoCell> infoTorreCelulares, ref Ubicacion ubicacionEstimada)
         {
             IList<InfoCell> infoTorreCelularesAsIList = infoTorreCelulares;
-            List<RangoEstimado> rangosEstimados = (List<RangoEstimado>)CalcularRadioTorreCelular(ref infoTorreCelularesAsIList);
+            //List<RangoEstimado> rangosEstimados = (List<RangoEstimado>)CalcularRadioTorreCelular(ref infoTorreCelularesAsIList);
+            
+            // en base a la lista de torres y sus ubicaciones, setea los valores de los parametros del modelo 
+            ObtenerParametros(ref infoTorreCelulares);
+            //Cambiar gps a srid
 
-            DatosSalida posicion = CalcularPosicion(rangosEstimados, ref infoTorreCelularesAsIList);
+            DatosSalida posicion = CalcularPosicion(ref infoTorreCelularesAsIList);
+
         }
 
         #region Torres Celulares
+
+        private void ObtenerParametros(ref List<InfoCell> infoTorreCelulares)
+        {
+            if (infoTorreCelulares == null || infoTorreCelulares.Count == 0)
+                return;
+
+            var dCellId = new Dictionary<InfoCell, long>(infoTorreCelulares.Count);
+            var lCellIds = new List<long>();
+
+            foreach (var infoCell in infoTorreCelulares)
+            {
+                try
+                {
+                    var id = long.Parse(infoCell.Cellid, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+
+                    dCellId[infoCell] = id;
+                    lCellIds.Add(id);
+                }
+                catch (Exception ex)
+                {
+                    // Si no puede parsear, dejás modelo vacío para ese item
+                    infoCell.ParametrosModelo = new ParametrosModelo { RSSI = infoCell.senialdB };
+                    _logger.Error($"ObtenerParametros -> CellID inválido '{infoCell.Cellid}': {ex.Message}");
+                }
+            }
+
+            if (lCellIds.Count == 0)
+                return;
+
+            var parametrosPorId = new Dictionary<long, (double betha0, double b, short tipoArea)>(lCellIds.Count);
+
+
+            // Primero hay que ver si ya tengo en la base los parametros del modelo para cada torre celular
+            //busco en la base de datos:
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    var cmd = new NpgsqlCommand(@"SELECT param_id, param_betha0, param_b, param_tipoarea FROM parametros_celdas_celulares WHERE param_id = ANY(@cellids)", conn);
+
+                    cmd.Parameters.Add("@ids", NpgsqlDbType.Array | NpgsqlDbType.Bigint).Value = lCellIds.ToArray();
+                    using var reader = cmd.ExecuteReader();
+
+                    while (reader.Read())
+                    {
+                        var id = reader.GetInt64(0);
+                        var betha0 = reader.GetDouble(1);
+                        var b = reader.GetDouble(2);
+                        var tipoArea = reader.GetInt16(3);
+
+                        parametrosPorId[id] = (betha0, b, tipoArea);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"ObtenerParametros -> Error inesperado: {ex.Message}");
+                    foreach (var infoCell in infoTorreCelulares)
+                        infoCell.ParametrosModelo = infoCell.ParametrosModelo ?? new ParametrosModelo { RSSI = infoCell.senialdB };
+
+                }
+            }
+
+            // Ahora asigno los parametros a cada torre celular sean de la base o por defecto
+            foreach (var infoCell in infoTorreCelulares)
+            {
+                // si no se pudo parsear el cellid, ya queda con el modelo por defecto
+                if (!dCellId.TryGetValue(infoCell, out var id))
+                    continue;
+
+                if (parametrosPorId.TryGetValue(id, out var p))
+                {
+                    infoCell.ParametrosModelo = new ParametrosModelo
+                    {
+                        Betha0 = p.betha0,
+                        B = p.b,
+                        TipoArea = (eTipoArea)p.tipoArea,
+                        RSSI = infoCell.senialdB
+                    };
+                    _logger.Debug($"ObtenerParametros -> Parametros encontrados para torre celular CellID={infoCell.Cellid}");
+                }
+                else
+                {
+                    infoCell.ParametrosModelo = new ParametrosModelo { RSSI = infoCell.senialdB };
+                    _logger.Debug($"ObtenerParametros -> No se encontraron parametros para torre celular CellID={infoCell.Cellid}");
+                }
+            }
+        }
+
         private void CargarDatosTorresCelulares(ref List<InfoCell> infoTorreCelulares, TrackerPayloadBase oPayload)
         {
             // casteo el objeto, que ya se que es y asi inicializo infocell
@@ -333,36 +427,53 @@ namespace ServidorTCP
             int i = 0;
             foreach (var infoCell in infoTorreCelulares)
             {
-                try
+                if (infoCell.IsInDatabase)
                 {
-                    var cellInfo = await _openCellID.GetCellInfoAsync(
-                        (int)infoCell.Mcc,
-                        (int)infoCell.Mnc,
-                        // el rastreador los envia en formato hexadecimal ej: "1AB5"
-                        int.Parse(infoCell.Lac, NumberStyles.HexNumber),
-                        int.Parse(infoCell.Cellid, NumberStyles.HexNumber)
-                    );
-
-                    if (cellInfo != null)
+                    //TODO: buscar en la base de datos local primero antes de ir a OpenCellID
+                    try
                     {
-                        infoCell.Lat = cellInfo.Lat;
-                        infoCell.Lon = cellInfo.Lon;
-                        infoCell.AverageSignalStrength = cellInfo.AverageSignalStrength;
-                        infoCell.Range = cellInfo.Range;
-                        infoCell.IsInDatabase = true;
+                        // TODO: implementar la busqueda en la base de datos local
 
-                        i = i++;
-                        _logger.Debug($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
-                        Console.WriteLine($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
+                        // inicializar Parametros de modelo si es que tienen
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Console.WriteLine($"No se encontraron coordenadas para la torre: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}");
+                        _logger.Error($"BuscarCoordenadasTorresCelularesAsync -> Error inesperado: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    Console.WriteLine($"Error al buscar coordenadas para la torre: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}. Detalles: {ex.Message}");
+                    try
+                    {
+                        var cellInfo = await _openCellID.GetCellInfoAsync(
+                            (int)infoCell.Mcc,
+                            (int)infoCell.Mnc,
+                            // el rastreador los envia en formato hexadecimal ej: "1AB5"
+                            int.Parse(infoCell.Lac, NumberStyles.HexNumber),
+                            int.Parse(infoCell.Cellid, NumberStyles.HexNumber)
+                        );
+
+                        if (cellInfo != null)
+                        {
+                            infoCell.Lat = cellInfo.Lat;
+                            infoCell.Lon = cellInfo.Lon;
+                            infoCell.AverageSignalStrength = cellInfo.AverageSignalStrength;
+                            infoCell.Range = cellInfo.Range;
+                            infoCell.IsInDatabase = true;
+
+                            i = i++;
+                            _logger.Debug($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
+                            Console.WriteLine($"Coordenadas encontradas: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}, Lat={infoCell.Lat}, Lon={infoCell.Lon}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"No se encontraron coordenadas para la torre: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error al buscar coordenadas para la torre: MCC={infoCell.Mcc}, MNC={infoCell.Mnc}, LAC={infoCell.Lac}, CellID={infoCell.Cellid}. Detalles: {ex.Message}");
+                    }
                 }
             }
             _logger.Debug($"Cantidad de coordenadas encontradas: [{0}]", i);
@@ -392,7 +503,7 @@ namespace ServidorTCP
                         Latitud = infoCell.Lat,
                         Longitud = infoCell.Lon
                     };
-                    handlerCanalInalambrico.Inicializar();
+                    handlerCanalInalambrico.Inicializar(ref infoTorreCelulares);
 
                     // con el Handler calculo un radio de distancia a la torre celular, luego va a ser un objeto
                     // que tenga mas informacion del calculo para sacar un intervalo de distancia y hacer anillo para triangulacion
@@ -411,10 +522,14 @@ namespace ServidorTCP
             return rangoEstimados;
         }
 
-        private DatosSalida CalcularPosicion(IList<RangoEstimado> rangos, ref IList<InfoCell> infoTorreCelulares)
+        private DatosSalida CalcularPosicion(ref IList<InfoCell> infoTorreCelulares)
         {
+
             HandlerCanalInalambrico handlerCanalInalambrico = new HandlerCanalInalambrico();
-            handlerCanalInalambrico.Inicializar();
+
+            // Cargo los datos de las torres celulares para inicializar el handler
+            handlerCanalInalambrico.Inicializar(ref infoTorreCelulares);
+
 
             List<InfoCell> torresCelularesEnDatabase = infoTorreCelulares.ToList().FindAll(t => t.IsInDatabase);
             Dictionary<long, CellInfo> cell = new Dictionary<long, CellInfo>();
@@ -432,7 +547,9 @@ namespace ServidorTCP
                         torre.Canal,
                         null,
                         eTipoArea.Desconocido,
-                        torre.senialdB
+                        torre.senialdB,
+                        torre.ParametrosModelo.Betha0,
+                        torre.ParametrosModelo.B
                     );
                     cell.Add(cellInfo.CellId, cellInfo);
                 }
@@ -442,10 +559,16 @@ namespace ServidorTCP
                 _logger.Error($"CalcularPosicion -> Error armando el diccionario de torres celulares: {ex.Message}");
 
             }
-            return handlerCanalInalambrico.CalcularPosicion(rangos, cell);
-
+            try
+            {
+                return handlerCanalInalambrico.CalcularPosicion(cell);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"CalcularPosicion -> Error en handler al calcular prosocion: {ex.Message}");
+                return new DatosSalida();
+            }
         }
-
 
         /// <summary>
         /// obtiene un numero de registro y carga los infocell

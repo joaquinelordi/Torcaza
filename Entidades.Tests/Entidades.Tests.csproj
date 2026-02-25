@@ -7,9 +7,12 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <UserSecretsId>647d4641-5af1-4bbf-9b2b-6b173887a345</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+	  <PackageReference Include="alglib.net" Version="3.19.0" />
+	  <PackageReference Include="FluentAssertions" Version="8.8.0" />
 	  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
 	  <PackageReference Include="xunit" Version="2.6.6" />
 	  <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6">
@@ -24,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Entidades\Entidades.csproj" />
+    <ProjectReference Include="..\ModuloAlertas\ModuloAlertas.csproj" />
     <ProjectReference Include="..\ServidorTCP\ServidorTCP.csproj" />
     <ProjectReference Include="..\Torcaza\Torcaza.csproj" />
   </ItemGroup>
