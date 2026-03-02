@@ -31,7 +31,8 @@ namespace ModuloAlertas
             {
                 if (!string.IsNullOrEmpty(chatID))
                 {
-                    await _botClient.EnviarNotificacionAsync(chatID, notificacion.Mensaje);
+                    await _botClient.EnviarNotificacionAsync(notificacion);
+
                     resultado = true;
                 }
                 else

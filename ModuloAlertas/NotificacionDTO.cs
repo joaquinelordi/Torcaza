@@ -25,5 +25,32 @@
             }
             return string.Empty;
         }
+
+        public string GetLatitud()
+        {
+            if (DatosAdicionales.ContainsKey("latitud"))
+            {
+                return DatosAdicionales["latitud"].ToString() ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        public string GetLongitud()
+        {
+            if (DatosAdicionales.ContainsKey("longitud"))
+            {
+                return DatosAdicionales["longitud"].ToString() ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        public string GetNombreDispositivo()
+        {
+            if (DatosAdicionales.ContainsKey("nombreDispositivo"))
+            {
+                return DatosAdicionales["nombreDispositivo"].ToString() ?? string.Empty;
+            }
+            return string.Empty;
+        }
     }
 }

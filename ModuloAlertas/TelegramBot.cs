@@ -104,10 +104,15 @@ namespace ModuloAlertas
             return _chatsActivos.Keys.ToList();
         }
 
-        public async Task EnviarNotificacionAsync(string chatId, string mensaje)
+        public async Task EnviarNotificacionAsync(NotificacionDTO notificacion)
         {
             try
             {
+                string mensaje = notificacion.Mensaje;
+                var chatId = notificacion.GetChatID();
+                var lat = notificacion.GetLatitud();
+                var lon = notificacion.GetLongitud();
+
                 var request = new SendMessageRequest
                 {
                     ChatId = chatId,
@@ -115,7 +120,26 @@ namespace ModuloAlertas
                     ParseMode = ParseMode.Markdown
                 };
 
+                // mensaje de texto
                 await _botClient.SendRequest(request);
+
+                if(!string.IsNullOrEmpty(lat) || !string.IsNullOrEmpty(lon))
+                {
+                    //lat = "-34,6257";
+                    //lon = "-58,3708";
+                    // mensaje de ubicación
+                    var locationRequest = new SendLocationRequest
+                    {
+                        ChatId = chatId,
+                        Latitude = double.TryParse(lat, out var latVal) ? latVal : -34.6257,
+                        Longitude = double.TryParse(lon, out var lonVal) ? lonVal : -58.3708,
+                        LivePeriod = 60 * 30 // la ubicación se muestra durante 30 minutos
+                    };
+                    Message mensajeUbicacion = await _botClient.SendRequest(locationRequest);
+
+                    int mensajeId = mensajeUbicacion.MessageId;
+                }
+
             }
             catch (Exception ex)
             {
