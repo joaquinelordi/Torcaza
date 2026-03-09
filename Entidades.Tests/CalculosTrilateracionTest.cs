@@ -3,12 +3,15 @@ using Entidades.CapaComunicacionBDD;
 using Entidades.Tests.TestDataTrilateracion;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.VisualStudio.TestPlatform.Utilities;
+using NLog;
 using Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Xunit.Abstractions;
 using Xunit.Sdk;
 using static Entidades.Utiles;
 
@@ -73,6 +76,43 @@ namespace Entidades.Tests
             act.Should().Throw<InvalidOperationException>();
         }
     }
+
+
+    public static class DatabaseTestConnection
+    {
+        private static readonly string? _connectionString;
+
+        static DatabaseTestConnection()
+        {
+            var cfg = new ConfigurationBuilder()
+                .AddUserSecrets<BethaCalculatorTests>(optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            _connectionString = cfg["DatabaseTests:ConnectionString"];
+        }
+
+        public static string GetConnectionString()
+        {
+            if (string.IsNullOrWhiteSpace(_connectionString))
+                throw new InvalidOperationException(
+                    "DatabaseTests:ConnectionString no está configurado en UserSecrets ni variables de entorno.");
+
+            return _connectionString;
+        }
+
+        public static NpgsqlConnection OpenOrSkip()
+        {
+            if (string.IsNullOrWhiteSpace(_connectionString))
+                throw new InvalidOperationException(
+                    "Falta DatabaseTests:ConnectionString en User Secrets o variables de entorno. Omitiendo tests PostGIS.");
+
+            var conn = new NpgsqlConnection(_connectionString);
+            conn.Open();
+            return conn;
+        }
+    }
+
 
     public class PostgisCalculosTests
     {
@@ -234,6 +274,21 @@ namespace Entidades.Tests
 
     public class SolverLManaliticoStrategy_Resolver_Tests
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ITestOutputHelper _output;
+        private string connString;
+
+        public SolverLManaliticoStrategy_Resolver_Tests(ITestOutputHelper output)
+        {
+            var cfg = new ConfigurationBuilder()
+                .AddUserSecrets<BethaCalculatorTests>(optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            connString = cfg["DatabaseTests:ConnectionString"];
+            _output = output;
+        }
+
         [Fact]
         public void Resolver_2D_ConDatosPerfectos_Recupera_Posicion_Y_Reduce_Costo_MismoBetha()
         {
@@ -415,6 +470,232 @@ namespace Entidades.Tests
 
                 estado.CodigoTerminacion.Should().NotBe(0);
             }
+        }
+
+
+        [Fact]
+        public async Task Resolver_2D_ConDatosCalibradosReales_LS_ReduceCosto_Y_SeAcercaAPosicionReal()
+        {
+            // Arrange
+            using var connString = DatabaseTestConnection.OpenOrSkip();
+            var sut = new SolverLManaliticoStrategy();
+
+            var xTrue = 5650552.497309424; 
+            var yTrue = 6168563.007306682;
+
+            var betaCalibrado = -92.46;
+            var bCalibrado = 25.55;
+
+            Vector2d[] torres =
+            {
+                new(5649069.450953917, 6168316.356679264),   // 128035347
+                new(5649615.273982389, 6168596.085787846),   // 128035588
+                new(5650474.6282124305, 6168970.56954909),   // 128055043
+                new(5650692.425865289, 6168822.750363382),   // 130051840
+                new(5650442.778087596, 6168704.737701939)    // 130051841
+            };
+
+            double[] rssis = { -96, -92, -96, -72, -76 };
+
+            var datos = RlmcScenario.BuildDataFromRealCalibration(
+                torres,
+                rssis,
+                betaCalibrado,
+                bCalibrado,
+                usarPesosWls: false);
+
+            var p0 = sut.CalcularCentroidePonderado(datos);
+
+            var cfg = new ConfigSolverRLMC(
+                diffStep: 1e-6,
+                maxIter: 200,
+                epsg: 1e-12,
+                epsf: 1e-12,
+                epsx: 1e-8,
+                dMinMetros: 1.0,
+                dMinBetha: 0.1,
+                p0: p0
+            );
+
+            var ctx = new SolverLManaliticoStrategy.LmContext
+            {
+                DatosEntrada = datos,
+                DMinMeters = cfg.dMinMetros,
+                Lambda = 0.0
+            };
+
+            double Cost(double x, double y)
+            {
+                var p = new[] { x, y };
+                var fi = new double[datos.Count];
+                SolverLManaliticoStrategy.CalcularResiduos(p, fi, ctx);
+                return fi.Sum(v => v * v);
+            }
+
+            var cost0 = Cost(p0.X, p0.Y);
+
+            // Act
+            var p = sut.Resolver(datos, cfg, out var estado);
+
+            // error en metros
+            double dx = p[0] - xTrue;
+            double dy = p[1] - yTrue;
+            double errorMetros = Math.Sqrt(dx * dx + dy * dy);
+
+            // Assert
+            p.Should().NotBeNull();
+            p.Length.Should().Be(2);
+
+            var cost1 = Cost(p[0], p[1]);
+            cost1.Should().BeLessThan(cost0);
+
+            // En caso real no espero exactitud submétrica.
+            p[0].Should().BeApproximately(xTrue, 300.0);
+            p[1].Should().BeApproximately(yTrue, 300.0);
+
+            estado.CodigoTerminacion.Should().NotBe(0);
+
+            var gpsReal = await ConsultasPostgis.Transformar22185AWgsAsync(connString,new Vector2d(xTrue, yTrue));
+            var gpsEstimado = await ConsultasPostgis.Transformar22185AWgsAsync(connString, new Vector2d(p[0], p[1]));
+
+            double lonReal = gpsReal.X;
+            double latReal = gpsReal.Y;
+
+            double lonEst = gpsEstimado.X;
+            double latEst = gpsEstimado.Y;
+
+            _logger.Debug($"Error posición (m): {errorMetros:F2}");
+            _output.WriteLine($"Error posición (m): {errorMetros:F2}");
+
+            _logger.Debug($"Posición real 22185: X={xTrue}, Y={yTrue}");
+            _logger.Debug($"Posición real GPS:   Lat={latReal:F8}, Lon={lonReal:F8}");
+            _logger.Debug($"Mapa real:           https://www.google.com/maps?q={latReal.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonReal.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            _logger.Debug($"Posición estimada 22185: X={p[0]}, Y={p[1]}");
+            _logger.Debug($"Posición estimada GPS:   Lat={latEst:F8}, Lon={lonEst:F8}");
+            _logger.Debug($"Mapa estimado:           https://www.google.com/maps?q={latEst.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonEst.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+            _output.WriteLine($"Posición real 22185: X={xTrue}, Y={yTrue}");
+            _output.WriteLine($"Posición real GPS:   Lat={latReal:F8}, Lon={lonReal:F8}");
+            _output.WriteLine($"Mapa real:           https://www.google.com/maps?q={latReal.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonReal.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            _output.WriteLine($"Posición estimada 22185: X={p[0]}, Y={p[1]}");
+            _output.WriteLine($"Posición estimada GPS:   Lat={latEst:F8}, Lon={lonEst:F8}");
+            _output.WriteLine($"Mapa estimado:           https://www.google.com/maps?q={latEst.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonEst.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+
+
+
+        [Fact]
+        public async Task Resolver_2D_ConDatosCalibradosReales_LS_ReduceCosto_Y_SeAcercaAPosicionRealEnPosicionNocCalibrada()
+        {
+
+            using var connString = DatabaseTestConnection.OpenOrSkip();
+            var sut = new SolverLManaliticoStrategy();
+
+            // Edificio de prefectura
+            var xTrue = 5649717.281892954;
+            var yTrue = 6170023.617803303;
+
+            //LS
+            //var betaCalibrado = -93.56;
+            //var bCalibrado = 23.70;
+
+            //WLS
+            var betaCalibrado = -92.46;
+            var bCalibrado = 25.55;
+
+            Vector2d[] torres =
+            {
+                new(5649609.469490251,   6169939.020577159),   // 128003589
+                new(5649553.530208294,   6169884.435784529),   // 128003596
+                new(5649819.387852795,   6169869.036436046),   // 128010245
+                new(5649554.965017851,   6169973.195340276)    // 128072964
+            };
+
+            double[] rssis = { -77.3, -81.0, -81.0, -80.6};
+
+            var datos = RlmcScenario.BuildDataFromRealCalibration(
+                torres,
+                rssis,
+                betaCalibrado,
+                bCalibrado,
+                usarPesosWls: false);
+
+            var p0 = sut.CalcularCentroidePonderado(datos);
+
+            var cfg = new ConfigSolverRLMC(
+                diffStep: 1e-6,
+                maxIter: 200,
+                epsg: 1e-12,
+                epsf: 1e-12,
+                epsx: 1e-8,
+                dMinMetros: 1.0,
+                dMinBetha: 0.1,
+                p0: p0
+            );
+
+            var ctx = new SolverLManaliticoStrategy.LmContext
+            {
+                DatosEntrada = datos,
+                DMinMeters = cfg.dMinMetros,
+                Lambda = 0.0
+            };
+
+            double Cost(double x, double y)
+            {
+                var p = new[] { x, y };
+                var fi = new double[datos.Count];
+                SolverLManaliticoStrategy.CalcularResiduos(p, fi, ctx);
+                return fi.Sum(v => v * v);
+            }
+
+            var cost0 = Cost(p0.X, p0.Y);
+
+            // Act
+            var p = sut.Resolver(datos, cfg, out var estado);
+
+            // error en metros
+            double dx = p[0] - xTrue;
+            double dy = p[1] - yTrue;
+            double errorMetros = Math.Sqrt(dx * dx + dy * dy);
+
+            // Assert
+            p.Should().NotBeNull();
+            p.Length.Should().Be(2);
+
+            var cost1 = Cost(p[0], p[1]);
+            cost1.Should().BeLessThan(cost0);
+
+            // En caso real no espero exactitud submétrica.
+            p[0].Should().BeApproximately(xTrue, 300.0);
+            p[1].Should().BeApproximately(yTrue, 300.0);
+
+            estado.CodigoTerminacion.Should().NotBe(0);
+
+            var gpsReal = await ConsultasPostgis.Transformar22185AWgsAsync(connString, new Vector2d(xTrue, yTrue));
+            var gpsEstimado = await ConsultasPostgis.Transformar22185AWgsAsync(connString, new Vector2d(p[0], p[1]));
+
+            double lonReal = gpsReal.X;
+            double latReal = gpsReal.Y;
+
+            double lonEst = gpsEstimado.X;
+            double latEst = gpsEstimado.Y;
+
+            _logger.Debug($"Error posición (m): {errorMetros:F2}");
+            _output.WriteLine($"Error posición (m): {errorMetros:F2}");
+
+            _logger.Debug($"Posición real 22185: X={xTrue}, Y={yTrue}");
+            _logger.Debug($"Posición real GPS:   Lat={latReal:F8}, Lon={lonReal:F8}");
+            _logger.Debug($"Mapa real:           https://www.google.com/maps?q={latReal.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonReal.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            _logger.Debug($"Posición estimada 22185: X={p[0]}, Y={p[1]}");
+            _logger.Debug($"Posición estimada GPS:   Lat={latEst:F8}, Lon={lonEst:F8}");
+            _logger.Debug($"Mapa estimado:           https://www.google.com/maps?q={latEst.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonEst.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+            _output.WriteLine($"Posición real 22185: X={xTrue}, Y={yTrue}");
+            _output.WriteLine($"Posición real GPS:   Lat={latReal:F8}, Lon={lonReal:F8}");
+            _output.WriteLine($"Mapa real:           https://www.google.com/maps?q={latReal.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonReal.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            _output.WriteLine($"Posición estimada 22185: X={p[0]}, Y={p[1]}");
+            _output.WriteLine($"Posición estimada GPS:   Lat={latEst:F8}, Lon={lonEst:F8}");
+            _output.WriteLine($"Mapa estimado:           https://www.google.com/maps?q={latEst.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lonEst.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
         }
     }
 }

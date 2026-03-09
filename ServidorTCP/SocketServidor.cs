@@ -263,7 +263,7 @@ namespace ServidorTCP
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
                         //TODO: refactorizar
                         CargarDatosRastreador(ref ubicacion, payloadBase);
-                        CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
+                        CargarRegistrosTorresCelulares(ref infoTorreCelulares, numeroEvento);
                         CargarUbicacion(ubicacion, numeroEvento);
                         break;
 
@@ -274,7 +274,7 @@ namespace ServidorTCP
                         BuscarCoordenadasTorresCelulares(ref infoTorreCelulares);
                         // TODO: devuelve una ubicacion con latitud y longitud estimada y singma en base a las torres celulares encontradas
                         EstimarUbicacion(ref infoTorreCelulares, ref ubicacionEstimada);
-                        CargarListaRegistroTorreCelular(ref infoTorreCelulares, numeroEvento);
+                        CargarRegistrosTorresCelulares(ref infoTorreCelulares, numeroEvento);
                         CargarUbicacion(ubicacionEstimada, numeroEvento);
                         break;
 
@@ -292,10 +292,10 @@ namespace ServidorTCP
             //List<RangoEstimado> rangosEstimados = (List<RangoEstimado>)CalcularRadioTorreCelular(ref infoTorreCelularesAsIList);
             
             // en base a la lista de torres y sus ubicaciones, setea los valores de los parametros del modelo 
-            ObtenerParametros(ref infoTorreCelulares);
+            //ObtenerParametros(ref infoTorreCelulares);
             //Cambiar gps a srid
 
-            DatosSalida posicion = CalcularPosicion(ref infoTorreCelularesAsIList);
+           //DatosSalida posicion = CalcularPosicion(ref infoTorreCelularesAsIList);
 
         }
 
@@ -574,7 +574,7 @@ namespace ServidorTCP
         /// obtiene un numero de registro y carga los infocell
         /// </summary>
         /// <param name="listaInfoCell"></param>
-        private void CargarListaRegistroTorreCelular(ref List<InfoCell> listaInfoCell, long numeroEvento)
+        private void CargarRegistrosTorresCelulares(ref List<InfoCell> listaInfoCell, long numeroEvento)
         {
             Guid numeroReporte = Guid.Empty;
 

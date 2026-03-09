@@ -166,5 +166,45 @@ namespace Entidades.Tests.TestDataTrilateracion
 
             return list;
         }
+
+        public static List<DatosEntradaRLMCPorRSSI> BuildDataFromRealCalibration(
+            Vector2d[] torresXY,
+            double[] rssis,
+            double betaGlobal,
+            double bGlobal,
+            bool usarPesosWls)
+        {
+            if (torresXY == null) throw new ArgumentNullException(nameof(torresXY));
+            if (rssis == null) throw new ArgumentNullException(nameof(rssis));
+            if (torresXY.Length != rssis.Length)
+                throw new ArgumentException("La cantidad de torres debe coincidir con la cantidad de RSSI.");
+
+            var list = new List<DatosEntradaRLMCPorRSSI>(torresXY.Length);
+
+            for (int i = 0; i < torresXY.Length; i++)
+            {
+                var rssi = rssis[i];
+
+                // Peso simple normalizado usando umbral -110 dB
+                // Señal más débil => menor peso
+                var w = usarPesosWls
+                    ? Math.Max(0.01, (110.0 + rssi) / 110.0)
+                    : 1.0;
+
+                list.Add(new DatosEntradaRLMCPorRSSI
+                {
+                    X = torresXY[i].X,
+                    Y = torresXY[i].Y,
+                    RSSI = rssi,
+                    Betha = betaGlobal,
+                    VarBetha = 1.0,
+                    VarRSSI = 1.0,
+                    W = w,
+                    B = bGlobal
+                });
+            }
+
+            return list;
+        }
     }
 }

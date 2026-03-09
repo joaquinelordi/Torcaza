@@ -103,17 +103,19 @@ namespace ModuloAlertas
                 {
                     // si hay usuarios para notificar, se envia la notificacion
                     NotificacionDTO notificacion = new NotificacionDTO();
-                    notificacion.Mensaje = $"Alerta de Cerco Virtual Activada.\nDispositivo ID: {ubicacion.DispositivoID}\nUbicación: Lat {ubicacion.Latitud}, Lon {ubicacion.Longitud}\nTimestamp: {ubicacion.Timestamp}\nAlerta ID: {alertaId}";
+                    notificacion.Mensaje = $"Alerta de Cerco Virtual Activada.\nDispositivo: Dispositivo01 \n Ubicación: Lat {ubicacion.Latitud}, Lon {ubicacion.Longitud} \n Timestamp: {ubicacion.Timestamp} \n Alerta ID: {alertaId}";
 
                     notificacion.DatosAdicionales = new Dictionary<string, object>
-                            {
-                                // Example entries, replace with actual data as needed
+                    {
                                 { "cercoId", cercoId },
                                 { "registroId", registroId },
                                 { "dispositivoId", dispositivoId },
                                 { "nombreUsuario",  nombreUsuario },
                                 { "emailUsuario", emailUsuario },
-                                { "chatIdTelegram", chatIdTelegram }
+                                { "chatIdTelegram", chatIdTelegram },
+                                { "latitud", ubicacion.Latitud },
+                                { "longitud", ubicacion.Longitud },
+                                { "nombreDispositivo", "Dispositivo01" }
                     };
 
                     _notificador.EnviarNotificacion(notificacion);

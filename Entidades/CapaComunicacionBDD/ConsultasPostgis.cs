@@ -12,8 +12,23 @@ using static Entidades.Utiles;
 
 namespace Entidades.CapaComunicacionBDD
 {
-    internal class ConsultasPostgis
+    internal static class ConsultasPostgis
     {
+        public static Task<Vector2d> Transformar22185AWgsAsync(
+            NpgsqlConnection conn,
+            Vector2d xy22185,
+            CancellationToken ct = default)
+        {
+            return PostgisTransforms.Transformar22185AWgsAsync(conn, xy22185, ct);
+        }
+
+        public static Task<List<Vector2d>> TransformarTuplasGpsA22185Async(
+            NpgsqlConnection conn,
+            IReadOnlyList<Vector2d> tuplasGps,
+            CancellationToken ct = default)
+        {
+            return PostgisTransforms.TransformarTuplasGpsA22185Async(conn, tuplasGps, ct);
+        }
     }
 
     public static class PostgisTransforms
@@ -70,7 +85,7 @@ namespace Entidades.CapaComunicacionBDD
             }
         }
 
-        // (Opcional) transforma un punto 22185 -> WGS84 (lon°,lat°)
+        //transforma un punto 22185 -> WGS84 (lon°,lat°)
         public static async Task<Vector2d> Transformar22185AWgsAsync(
             NpgsqlConnection conn,
             Vector2d xy22185,
