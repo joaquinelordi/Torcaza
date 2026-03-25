@@ -194,7 +194,7 @@ namespace ServidorTCP
             List<InfoCell> infoTorreCelulares = new List<InfoCell>();
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
-            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440014");
             // Aca deberia cargar el evento en la base de datos y devolver el numero de evento
             long numeroEvento;
             DateTime fechaMensaje = DateTime.UtcNow;//payloadBase.DateTime.ToUniversalTime();
@@ -580,7 +580,7 @@ namespace ServidorTCP
 
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
-            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440014");
             var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
 
             numeroReporte = ObtenerNumeroReporte(idRegistro, idDispositivo, agenteID);
@@ -607,7 +607,7 @@ namespace ServidorTCP
         {
             // estos campos los deberia saber o el servidor a partir de un UUID del dispositivo
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
-            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440014");
             var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
 
             // Convertimos la fecha y hora al formato UTC
@@ -739,7 +739,7 @@ namespace ServidorTCP
             // La idea es que el mensaje sea un objeto JSON con la siguiente estructura
             // Uso UUID fijos para las pruebas inicialies, solo recibo la latitud y longitud en un principio
             var idRegistro = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
-            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+            var idDispositivo = Guid.Parse("550e8400-e29b-41d4-a716-446655440014");
             var ubiTimestamp = DateTime.Now; //ubicacion.Timestamp;
             var agenteID = Guid.Parse("550e8400-e29b-41d4-a716-446655440005");
             ubicacion.IDAgente = agenteID.ToString();
@@ -895,7 +895,7 @@ namespace ServidorTCP
                     {
                         try
                         {
-                            var dispositivoID = Guid.Parse("550e8400-e29b-41d4-a716-446655440001");
+                            var dispositivoID = Guid.Parse("550e8400-e29b-41d4-a716-446655440014");
 
                             //grabar tabla dispositivo_cerco
                             using var cmdDispCerco = new NpgsqlCommand(

@@ -11,8 +11,8 @@
         public DateTime Timestamp { get; set; }
         public double Hdop { get; set; }
         public double Altitud { get; set; }
-
         public double SigmaPosicion { get; set; }
+        public string AliasDispositivo { get; set; }
 
         public Ubicacion()  
         {
@@ -26,6 +26,7 @@
             Altitud = 0;
             Timestamp = DateTime.MinValue;   
             SigmaPosicion = 0;
+            AliasDispositivo = string.Empty;
         }
 
         public Ubicacion(GnssInfoPayload payload)
@@ -36,6 +37,8 @@
             Hdop = payload.Hdop;
             Altitud = payload.Altitude;
             Timestamp = payload.DateTime;
+            SigmaPosicion = 0;
+            AliasDispositivo = "";
         }
     }
 }

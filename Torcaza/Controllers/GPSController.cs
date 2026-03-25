@@ -64,7 +64,7 @@ namespace Torcaza.Controllers
                 // Llamada a la función crear_historial_ubicacion
                 using var command = new NpgsqlCommand("SELECT ubi_coordenadas, ubi_timestamp FROM crear_historial_ubicacion(@idRegistro, @idDispositivo, @agenteID, @fechaDesde, @fechaHasta)", connection);
                 command.Parameters.AddWithValue("idRegistro", Guid.Parse("550e8400-e29b-41d4-a716-446655440000"));
-                command.Parameters.AddWithValue("idDispositivo", Guid.Parse("550e8400-e29b-41d4-a716-446655440001"));
+                command.Parameters.AddWithValue("idDispositivo", Guid.Parse("550e8400-e29b-41d4-a716-446655440014"));
                 command.Parameters.AddWithValue("agenteID", Guid.Parse("550e8400-e29b-41d4-a716-446655440002"));
                 command.Parameters.AddWithValue("fechaDesde", consulta.FechaDesde);
                 command.Parameters.AddWithValue("fechaHasta", consulta.FechaHasta);
@@ -169,7 +169,7 @@ namespace Torcaza.Controllers
                     // Cargo los parametros para la consulta de torres celulares
                     using var command = new NpgsqlCommand("SELECT * FROM obtener_celdas_por_nro_registro(@idRegistro, @idDispositivo, @agenteID, @nroReporte)", connection);
                     command.Parameters.AddWithValue("idRegistro", Guid.Parse("550e8400-e29b-41d4-a716-446655440000"));
-                    command.Parameters.AddWithValue("idDispositivo", Guid.Parse("550e8400-e29b-41d4-a716-446655440001"));
+                    command.Parameters.AddWithValue("idDispositivo", Guid.Parse("550e8400-e29b-41d4-a716-446655440014"));
                     command.Parameters.AddWithValue("agenteID", Guid.Parse("550e8400-e29b-41d4-a716-446655440002"));
                     command.Parameters.AddWithValue("nroReporte", numeroReporte); // Ajustar según sea necesario
 

@@ -6,6 +6,9 @@ using ServidorTCP;
 using Microsoft.AspNetCore.SignalR;
 using Torcaza.Hubs;
 using ModuloAlertas;
+using System.Security.Claims;
+using ModuloBaseDatos;
+
 
 namespace Torcaza.Controllers
 {
@@ -19,6 +22,7 @@ namespace Torcaza.Controllers
         private readonly CapaComunicacionAppCliente _appCliente;
         private readonly IHubContext<AlertasHub> _hubContext;
         private readonly TelegramBot _notificadorTelegramBot;
+        private readonly ComunicacionBDD _comunicacionBDD;
 
         public CapaComunicacionAplicacionController(TcpServer tcpServer, HandlerJWT handlerJWT, CapaComunicacionAppCliente appCliente, IHubContext<AlertasHub> hubContext, TelegramBot notificadorTelegramBot)
         {
@@ -27,7 +31,7 @@ namespace Torcaza.Controllers
             _appCliente = appCliente;
             _hubContext = hubContext;
             _notificadorTelegramBot = notificadorTelegramBot;
-
+            _comunicacionBDD = new ComunicacionBDD();
             _logger.Debug("CapaComunicacionAplicacionController inicializado.");
         }
 
@@ -42,7 +46,7 @@ namespace Torcaza.Controllers
             var contenido = await reader.ReadToEndAsync();
 
             //MNGNSS
-            contenido = "eyJhbGciOiAiSFMyNTYiLCJ0eXAiOiJKV1QifQ.eyJUeXBlIjoiTU5HTlNTIiwiSU1FSSI6ODY4NDUwMDQxNzMzNzE2LCJFVk5UIjoiUEFSS0lORyIsIkxBVCI6LTM0LjYyNTc0MCwiTE9ORyI6LTU4LjM2OTQxMSwiSERPUCI6MS4xMCwiQUxUIjoxMS44MCwiQ09HIjowLjAwLCJTUEQiOjAuMDAsIk1OQyI6NywiTUNDIjo3MjIsIkxBQyI6IjExQ0MiLCJDSUQiOiI1QjU1QzAzIiwiU0xWTCI6LTUxLjAwLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwMzA4MjUxOTQ4NTciLCJCU1RBIjowLCJCTFZMIjo4OCwiU0lNVSI6MywiQVgiOi0wLjAyLCJBWSI6MC4wMCwiQVoiOi0wLjAyLCJZQVciOi0xNjkuMzYsIlJPTEwiOi0xLjQwLCJQVENIIjotOS4zNH0.BFAQbuKCxQRxKuuOiyTPsxBc7yygfKAMnmvwLz4rQKs";
+            //contenido = "eyJhbGciOiAiSFMyNTYiLCJ0eXAiOiJKV1QifQ.eyJUeXBlIjoiTU5HTlNTIiwiSU1FSSI6ODY4NDUwMDQxNzMzNzE2LCJFVk5UIjoiUEFSS0lORyIsIkxBVCI6LTM0LjYyNTc0MCwiTE9ORyI6LTU4LjM2OTQxMSwiSERPUCI6MS4xMCwiQUxUIjoxMS44MCwiQ09HIjowLjAwLCJTUEQiOjAuMDAsIk1OQyI6NywiTUNDIjo3MjIsIkxBQyI6IjExQ0MiLCJDSUQiOiI1QjU1QzAzIiwiU0xWTCI6LTUxLjAwLCJURUNIIjo3LCJSRUdTIjoxLCJDSE5MIjoyMDAwLCJCQU5EIjoiTFRFIEJBTkQgNCIsIlRJTUUiOiIwMzA4MjUxOTQ4NTciLCJCU1RBIjowLCJCTFZMIjo4OCwiU0lNVSI6MywiQVgiOi0wLjAyLCJBWSI6MC4wMCwiQVoiOi0wLjAyLCJZQVciOi0xNjkuMzYsIlJPTEwiOi0xLjQwLCJQVENIIjotOS4zNH0.BFAQbuKCxQRxKuuOiyTPsxBc7yygfKAMnmvwLz4rQKs";
             //MNMN
             //contenido = "eyJhbGciOiAiSFMyNTYiLCJ0eXAiOiJKV1QifQ.eyJUeXBlIjoiTU5NTiIsIklNRUkiOjg2ODQ1MDA0MTczMzcxNiwiRVZOVCI6IlBBUksiLCJNQ0MiOjcyMiwiTU5DIjo3LCJMQUMiOiIxMUMwIiwiQ0lEIjoiNjFFQkQwMiIsIlNMVkwiOi02NS4wMCwiVEVDSCI6NywiUkVHUyI6MSwiQ0hOTCI6MjAwMCwiQkFORCI6IkxURSBCQU5EIDQiLCJUSU1FIjoiMTEwODI1MTAwODA5IiwiQlNUQSI6MCwiQkxWTCI6OTAsIlNJTVUiOjMsIkFYIjowLjAwLCJBWSI6LTAuMDAsIkFaIjotMC4wMCwiWUFXIjotMTAwLjg5LCJST0xMIjowLjkxLCJQVENIIjoyLjc2LCJOZWlnaGJvcnMiOlt7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTNCMCIsIlNMVkwiOi02Ni4wMH0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjE2REUiLCJTTFZMIjotNjcuMDB9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiJBNzY4IiwiU0xWTCI6LTY5LjAwfSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTczRCIsIlNMVkwiOi03MC4wMH0seyJURUNIIjoyLCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiMTNGMiIsIkNJRCI6IjEzQjIiLCJTTFZMIjotNzIuMDB9LHsiVEVDSCI6MiwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjEzRjIiLCJDSUQiOiIxM0IxIiwiU0xWTCI6LTc1LjAwfSx7IlRFQ0giOjIsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIxM0YyIiwiQ0lEIjoiMTZERiIsIlNMVkwiOi04MC4wMH0seyJURUNIIjo0LCJNQ0MiOjcyMiwiTU5DIjozNCwiTEFDIjoiM0IwMiIsIkNJRCI6IjdBMTJFMDUiLCJTTFZMIjotODIuMDB9LHsiVEVDSCI6NCwiTUNDIjo3MjIsIk1OQyI6MzQsIkxBQyI6IjNCMDIiLCJDSUQiOiI3QTEyRTA2IiwiU0xWTCI6LTkzLjAwfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjM0LCJMQUMiOiIzQjAyIiwiQ0lEIjoiN0EyM0QwMSIsIlNMVkwiOi05Ni4wMH0seyJURUNIIjozLCJNQ0MiOjcyMiwiTU5DIjo3LCJMQUMiOiIxMTc3IiwiQ0lEIjoiMUMyRkY3IiwiU0xWTCI6LTYzLjAwfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiJDMzkzRDEzIiwiU0xWTCI6LTc2LjAwfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiI2MUVCRDBCIiwiU0xWTCI6LTkzLjAwfSx7IlRFQ0giOjQsIk1DQyI6NzIyLCJNTkMiOjcsIkxBQyI6IjExQzAiLCJDSUQiOiI2MUVCRDAyIiwiU0xWTCI6LTk1LjAwfV19Cg.YaH5CqmLvhh-uUldIvu3ML0Vy-a1_Xkstd9ANeo3B7Q";
             contenido = contenido.Trim('\r','\n');
@@ -100,7 +104,7 @@ namespace Torcaza.Controllers
         /// 
         /// </summary>
         /// <returns></returns>
-        [HttpPost("cercosVirtuales")]
+        [HttpPost("confirmar-cercos")]
         public async Task<IActionResult> ProcesarCercosVirtuales()
         {
             try
@@ -144,7 +148,7 @@ namespace Torcaza.Controllers
             }
         }
 
-        [HttpGet("cercosvirtuales")]
+        [HttpGet("consultar-cercos")]
         public async Task<IActionResult> ConsultarCercosVirtuales([FromQuery] Guid registroID)
         {
             try
@@ -192,6 +196,87 @@ namespace Torcaza.Controllers
                 {
                     success = false,
                     message = "Error al consultar cercos virtuales.",
+                    error = e.Message
+                });
+            }
+        }
+
+        [HttpGet("usuario")]
+        public async Task<IActionResult> ObtenerContextoUsuarioWebAsync([FromQuery] string auth0UserId)
+        {
+            // Se recibe la información por query string: ?auth0UserId=...
+            if (string.IsNullOrWhiteSpace(auth0UserId))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Parámetro 'auth0UserId' requerido en la query string."
+                });
+            }
+            _logger.Debug("ObtenerContextoUsuarioWebAsync -> auth0UserId: {0}", auth0UserId);
+
+            try
+            {
+                // Aquí iría la lógica para obtener el contexto del usuario (por ejemplo consultando _appCliente, base de datos, etc.).
+                // De momento se devuelve un objeto mínimo con el auth0UserId para mantener la compatibilidad con el cliente.
+                
+                ContextoUsuarioDto usuarioWeb = _comunicacionBDD.ObtenerContextoUsuarioWeb(auth0UserId);
+
+                var contextoPlaceholder = new
+                {
+                    success = true,
+                    auth0UserId = auth0UserId
+                };
+
+                string sPayload = JsonConvert.SerializeObject(usuarioWeb);
+                return Ok(sPayload);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error en ObtenerContextoUsuarioWebAsync");
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error al obtener contexto de usuario.",
+                    error = ex.Message
+                });
+            }
+
+        }
+
+        [HttpPost("historial-ubicacion")]
+        public async Task<IActionResult> ConsultarHistorialUbicacion()
+        {
+            using var reader = new StreamReader(Request.Body);
+            var contenido = await reader.ReadToEndAsync();
+            contenido = contenido.Trim('\r', '\n');
+
+            if (string.IsNullOrWhiteSpace(contenido))
+                return BadRequest("El body está vacío.");
+
+            try
+            {
+                var payloadRecibido = JsonDeserializer.DeserializeJson<ApiRequest>(contenido);
+                var historialUbicacion = JsonDeserializer.DeserializeJson<DTOHistorialUbicacion>(payloadRecibido.Payload);
+
+                List<Ubicacion> ubicaciones = _comunicacionBDD.ConsultarHistorialUbicacion(historialUbicacion);
+
+                var jsonResponse = new Dictionary<string, object>
+                {
+                    { "success", true },
+                    { "message", "Historial de ubicación obtenido correctamente." },
+                    { "ubicaciones", ubicaciones }
+                };
+
+                string payload = JsonConvert.SerializeObject(jsonResponse);
+                return Content(payload, "application/json");
+            }
+            catch (Exception e)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error al procesar historial de ubicación.",
                     error = e.Message
                 });
             }

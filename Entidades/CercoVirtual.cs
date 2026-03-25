@@ -59,4 +59,37 @@ namespace Entidades
         public List<CercoVirtualBase> Cercos { get; set; }
     }
 
+    //Data Transfer Object para enviar los cercos
+    public class CercoVirtualDto
+    {
+        public string Tipo { get; set; }
+        // Rectangulo
+        public double? SurOesteLat { get; set; }
+        public double? SurOesteLng { get; set; }
+        public double? NorEsteLat { get; set; }
+        public double? NorEsteLng { get; set; }
+        // Circulo
+        public double? Lat { get; set; }
+        public double? Lng { get; set; }
+        public double? Radio { get; set; }
+
+        // Poligono
+        public List<(double Lat, double Lng)> Vertices { get; set; }
+    }
+
+    // Wrapper DTO: metadatos del cerco asociados a usuario/dispositivo
+    public class CercoVirtualRegistroDto
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+
+        public string DispositivoId { get; set; } = string.Empty;
+        public string DispositivoNombre { get; set; } = string.Empty;
+
+        public DateTimeOffset CreadoEn { get; set; }
+        public bool Activo { get; set; } = true;
+
+        public string GeoJsonCerco4326 { get; set; } = string.Empty;
+    }
 }

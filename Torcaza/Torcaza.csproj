@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Entidades\Entidades.csproj" />
+    <ProjectReference Include="..\ModuloBaseDatos\ModuloBaseDatos.csproj" />
     <ProjectReference Include="..\ServidorTCP\ServidorTCP.csproj" />
   </ItemGroup>
 

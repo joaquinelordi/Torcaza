@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Entidades.Tests", "Entidade
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModuloAlertas", "ModuloAlertas\ModuloAlertas.csproj", "{8D8FC037-519F-4626-A652-9FDC82CC359B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModuloBaseDatos", "ModuloBaseDatos\ModuloBaseDatos.csproj", "{590AD513-307F-453F-B45E-17A20214AF7D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{8D8FC037-519F-4626-A652-9FDC82CC359B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D8FC037-519F-4626-A652-9FDC82CC359B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D8FC037-519F-4626-A652-9FDC82CC359B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{590AD513-307F-453F-B45E-17A20214AF7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{590AD513-307F-453F-B45E-17A20214AF7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{590AD513-307F-453F-B45E-17A20214AF7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{590AD513-307F-453F-B45E-17A20214AF7D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
