@@ -32,6 +32,7 @@ namespace Entidades
     public class DispositivoDto
     {
         public int Id { get; set; }
+        public string DispositivoId { get; set; } = string.Empty;
         public string Nombre { get; set; } = string.Empty;
         public string? Estado { get; set; }
         public string? UltimaConexion { get; set; }

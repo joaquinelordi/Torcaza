@@ -20,17 +20,29 @@ namespace ModuloBaseDatos
         {
             var dispositivos = new List<DispositivoDto>();
             List<CercoVirtualRegistroDto> CercosVirtuales = new List<CercoVirtualRegistroDto>();
-            List<string> lDispId = new List<string>();
+            Dictionary<string, string> dNombrexDispositivoId = new Dictionary<string, string>();
 
             try
             {
                 using var conn = new NpgsqlConnection(_connectionSQLString);
                 conn.Open();
 
-                const string sql = @"SELECT dxu_numer AS ""Id"", dxu_alias AS Nombre, dxu_dispositivoid AS dispositivoId, dxu_activo AS Activo 
-                    FROM dispositivos_por_usuario";
+                const string sql = @"SELECT dxu_numer AS ""Id"", dxu_alias AS Nombre, dxu_dispositivoid AS dispositivoId,
+                    dxu_activo AS Activo, user_registroid as registroid, u.ultima_conexion as ultima conexion 
+                    FROM dispositivos_por_usuario
+                    LEFT JOIN usuarios ON dxu_registroid = user_registroid
+                    LEFT JOIN
+                        (
+                            SELECT ""ubi_registroID"", ""ubi_dispositivoID"", MAX(ubi_timestamp) AS ultima_conexion
+                            FROM ubicacion
+                            GROUP BY ubi_registroID, ubi_dispositivoID
+                        ) u 
+                        ON u.ubi_registroID = dxu_registroid AND u.ubi_dispositivoID = dxu_dispositivoid
+                    WHERE user_auth0id = @auth0id
+                ";
 
                 using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("auth0id", NpgsqlDbType.Varchar, userId);
 
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -41,6 +53,9 @@ namespace ModuloBaseDatos
                         int idxNombre = reader.GetOrdinal("Nombre");
                         int idxActivox = reader.GetOrdinal("Activo");
                         int idxDispIdx = reader.GetOrdinal("dispositivoId");
+                        int idxRegIdx = reader.GetOrdinal("registroId");
+                        int idxUltConx = reader.GetOrdinal("ultima_conexion");
+
 
                         int id = reader.IsDBNull(idxId) ? 0 : reader.GetInt32(idxId);
                         string nombre = reader.IsDBNull(idxNombre) ? string.Empty : reader.GetString(idxNombre);
@@ -52,7 +67,21 @@ namespace ModuloBaseDatos
                             dispositivoID = reader.GetGuid(idxDispIdx).ToString();
                         }
 
-                        lDispId.Add(dispositivoID);
+                        string registroID = string.Empty;
+                        if (!reader.IsDBNull(idxRegIdx))
+                        {
+                            registroID = reader.GetGuid(idxRegIdx).ToString();
+                        }
+
+                        DateTime ultimaConexion = DateTime.MinValue;
+                        if (!reader.IsDBNull(idxUltConx))
+                        {
+                            var dto = reader.GetFieldValue<DateTimeOffset>(idxUltConx);
+                            ultimaConexion = dto.UtcDateTime;
+                        }
+
+
+                        dNombrexDispositivoId.Add(dispositivoID, nombre);
 
                         dispositivos.Add(new DispositivoDto
                         {
@@ -60,12 +89,12 @@ namespace ModuloBaseDatos
                             Id = id,
                             Estado = activo ? "Persecucion" : "Inactivo",
                             Activo = activo,
-                            UltimaConexion = DateTime.UtcNow.AddMinutes(-5).ToString()
+                            UltimaConexion = ultimaConexion == DateTime.MinValue ? string.Empty : ultimaConexion.ToString("yyyy-MM-dd HH:mm:ss")
                         });
                     }
                 }
 
-                var dispositivosGuids = lDispId.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => Guid.Parse(s)).ToArray();
+                var dispositivosGuids = dNombrexDispositivoId.Where(s => !string.IsNullOrWhiteSpace(s.Key)).Select(s => Guid.Parse(s.Key)).ToArray();
 
                 if (dispositivosGuids.Length > 0)
                 {
@@ -116,7 +145,7 @@ namespace ModuloBaseDatos
                                     Nombre = cercoNombre,
                                     Activo = activoCerco,
                                     DispositivoId = dispositivoIdStr,
-                                    DispositivoNombre = dispositivos.FirstOrDefault(d => d.Id.ToString() == dispositivoIdStr)?.Nombre ?? string.Empty,
+                                    DispositivoNombre = dNombrexDispositivoId.FirstOrDefault(s => s.Key == dispositivoIdStr).Value ?? string.Empty,
                                     GeoJsonCerco4326 = geomGeoJson
                                 };
                                 CercosVirtuales.Add(cerco);
