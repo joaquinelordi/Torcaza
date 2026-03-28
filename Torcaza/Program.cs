@@ -2,6 +2,7 @@ using Entidades;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -9,6 +10,7 @@ using ModuloAlertas;
 using ServidorTCP;
 using System.Configuration;
 using System.Net;
+using Torcaza.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -142,7 +144,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("SignalRDev", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5183", "https://localhost:5183")
+            .WithOrigins("http://localhost:5183", "https://localhost:5183", "https://localhost:7089/")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials(); // necesario si luego usás cookies o accessTokenFactory
@@ -199,6 +201,26 @@ app.MapHub<Torcaza.Hubs.AlertasHub>("/hub/Alertas").RequireCors("SignalRDev");
 
 // Controllers (si querés también dejarlos sin auth mientras probás)
 app.MapControllers(); // .RequireAuthorization("EncryptedOnly");  <- COMENTALO EN PRUEBA
+
+// Endpoint de prueba para enviar alertas desde el backend (curl / Postman)
+app.MapPost("/api/test/alert", async (Microsoft.AspNetCore.SignalR.IHubContext<AlertasHub> hubContext, HttpRequest req) =>
+{
+    string message = req.Query["message"];
+    if (string.IsNullOrWhiteSpace(message))
+    {
+        using var sr = new System.IO.StreamReader(req.Body);
+        message = await sr.ReadToEndAsync();
+    }
+
+    if (string.IsNullOrWhiteSpace(message))
+    {
+        message = "Alerta de prueba desde backend: " + DateTime.UtcNow.ToString("o");
+    }
+
+    // Envía a todos los clientes conectados el evento "RecibirAlerta"
+    await hubContext.Clients.All.SendAsync("RecibirAlerta", message);
+    return Results.Ok(new { sent = true, message });
+}).WithName("TestSendAlert");
 
 //Inicio servidor TCP
 var tcpService = app.Services.GetRequiredService<TcpServer>();

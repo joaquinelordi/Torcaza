@@ -52,5 +52,22 @@
             }
             return string.Empty;
         }
+
+        public string GetActualizarUbicacionID()
+        {
+            if (DatosAdicionales.ContainsKey("actualizarUbicacionId"))
+            {
+                return DatosAdicionales["actualizarUbicacionId"].ToString() ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        public void SetActualizarUbicacionID(string id)
+        {
+            if (DatosAdicionales.ContainsKey("actualizarUbicacionId"))
+            {
+                DatosAdicionales["actualizarUbicacionId"] = id;
+            }
+        }
     }
 }

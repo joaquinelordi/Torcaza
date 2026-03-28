@@ -28,16 +28,16 @@ namespace ModuloBaseDatos
                 conn.Open();
 
                 const string sql = @"SELECT dxu_numer AS ""Id"", dxu_alias AS Nombre, dxu_dispositivoid AS dispositivoId,
-                    dxu_activo AS Activo, user_registroid as registroid, u.ultima_conexion as ultima conexion 
+                    dxu_activo AS Activo, user_registroid as registroid, u.ultima_conexion as ultima_conexion 
                     FROM dispositivos_por_usuario
                     LEFT JOIN usuarios ON dxu_registroid = user_registroid
                     LEFT JOIN
                         (
                             SELECT ""ubi_registroID"", ""ubi_dispositivoID"", MAX(ubi_timestamp) AS ultima_conexion
                             FROM ubicacion
-                            GROUP BY ubi_registroID, ubi_dispositivoID
+                            GROUP BY ""ubi_registroID"", ""ubi_dispositivoID""
                         ) u 
-                        ON u.ubi_registroID = dxu_registroid AND u.ubi_dispositivoID = dxu_dispositivoid
+                        ON u.""ubi_registroID"" = dxu_registroid AND u.""ubi_dispositivoID"" = dxu_dispositivoid
                     WHERE user_auth0id = @auth0id
                 ";
 
@@ -243,6 +243,8 @@ namespace ModuloBaseDatos
                     WHERE us.user_auth0id = @auth0id
                       AND dxu.dxu_numer = ANY(@dispositivos)
                       AND u.ubi_timestamp BETWEEN @fechaDesde AND @fechaHasta
+                      AND u.ubi_coordenadas IS NOT NULL
+                      AND NOT (ST_X(u.ubi_coordenadas) = 0 AND ST_Y(u.ubi_coordenadas) = 0)
                     ORDER BY u.ubi_timestamp ASC;
                 ";
 

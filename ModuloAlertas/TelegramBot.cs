@@ -138,6 +138,7 @@ namespace ModuloAlertas
                     Message mensajeUbicacion = await _botClient.SendRequest(locationRequest);
 
                     int mensajeId = mensajeUbicacion.MessageId;
+                    notificacion.SetActualizarUbicacionID(mensajeId.ToString());
                 }
 
             }
@@ -146,6 +147,34 @@ namespace ModuloAlertas
                 _logger.Error($"Error al enviar notificación a Telegram: {ex.Message}");
             }
         }
+
+        public async Task EnviarActualizacionUbicacionAsync(NotificacionDTO notificacion)
+        {
+            try
+            {
+                var chatId = notificacion.GetChatID();
+                var lat = notificacion.GetLatitud();
+                var lon = notificacion.GetLongitud();
+                var mensajeId = notificacion.GetActualizarUbicacionID();
+                if (!string.IsNullOrEmpty(mensajeId) && !string.IsNullOrEmpty(lat) && !string.IsNullOrEmpty(lon))
+                {
+                    var editRequest = new EditMessageLiveLocationRequest
+                    {
+                        ChatId = chatId,
+                        MessageId = int.Parse(mensajeId),
+                        Latitude = double.TryParse(lat, out var latVal) ? latVal : -34.8257,
+                        Longitude = double.TryParse(lon, out var lonVal) ? lonVal : -58.8708
+                    };
+                    await _botClient.SendRequest(editRequest);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error al actualizar ubicación en Telegram: {ex.Message}");
+            }
+
+        }
+
 
         /// <summary>
         /// Pull manual de actualizaciones pendientes desde Telegram.
